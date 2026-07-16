@@ -1,0 +1,222 @@
+{
+  "project_info": {
+    "project_number": "657966459097",
+    "project_id": "azyaa-0uiv4k",
+    "storage_bucket": "azyaa-0uiv4k.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:657966459097:android:882e056ff7fdaa0ea8f6c8",
+        "android_client_info": {
+          "package_name": "azyaa.adminpanel.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "657966459097-ehs7vo1tvapfmvqhden5it68s3l5lbt5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "azyaa.adminpanel.com",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAk7Qgv68m_DuCEXKN-T_tAyUvuxMF9GGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "657966459097-118hcihk950q475dl1njo5iamd7m7tbp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.azyaa"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:657966459097:android:781a50a82608bf6ba8f6c8",
+        "android_client_info": {
+          "package_name": "com.azya.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "657966459097-37ro8q9l301bh5440345a7f4u6betici.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "35159a1a13e86a2037ceec1ab47a05d9124a63c9"
+          }
+        },
+        {
+          "client_id": "657966459097-7otc2fbrnng3fmqu5255p4o63t6jogrk.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "77f418d15282ddfc6a0bba83cf586a49a107d2df"
+          }
+        },
+        {
+          "client_id": "657966459097-9rlsp2ugvqbgqk1vrbt8d6eq8qqa1flu.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "d2ff52d7c134798ab47c78af219bc4fb2a387f87"
+          }
+        },
+        {
+          "client_id": "657966459097-anq32nni1adfml159idu1el751ph4sni.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "2f220689d6379cdb4cd3178806971087bb478d2c"
+          }
+        },
+        {
+          "client_id": "657966459097-fpi3al8r7bnogghjpriaumkpmfc2bqsh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "528350139d9060aa739f62b37900baee0fa23369"
+          }
+        },
+        {
+          "client_id": "657966459097-hfg7j24shiu31pvt3ont3hj3171tdigo.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "b20d0d75510c94cccf4f433d794b57f8d7d70690"
+          }
+        },
+        {
+          "client_id": "657966459097-m8a3i23ord84mq064vfucrtcs1ngjhkp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "33deb9aeccafeac90599f7e14371203aa9c14ce7"
+          }
+        },
+        {
+          "client_id": "657966459097-oa265oen48tgkbjq68kvkcpfdqrcr16d.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "ba4e82a47d20cb6cb0fc8ebca1cbca60c3efcaeb"
+          }
+        },
+        {
+          "client_id": "657966459097-oocagjd2tjruf41u2qgu6ipug0st2p8g.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "295acc48cae324f025a89867b9f692199c9e7323"
+          }
+        },
+        {
+          "client_id": "657966459097-orl93om4nmcp94gk6fq8503ks44s92ea.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "42d5ae0a1513e603d8d405df2150db63978fbceb"
+          }
+        },
+        {
+          "client_id": "657966459097-uoufg8gavmu6hdvlmbf1fm7jf8dg16k6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azya.app",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAk7Qgv68m_DuCEXKN-T_tAyUvuxMF9GGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "657966459097-118hcihk950q475dl1njo5iamd7m7tbp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.azyaa"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:657966459097:android:a923b20940a94250a8f6c8",
+        "android_client_info": {
+          "package_name": "com.azyaDelivery.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "657966459097-fdcf1mkph9bp8d3i63iik9ql59kithc2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.azyaDelivery.app",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAk7Qgv68m_DuCEXKN-T_tAyUvuxMF9GGg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "657966459097-jmsgt4ousl18qmk9j5j23ojod7ebsohq.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "657966459097-118hcihk950q475dl1njo5iamd7m7tbp.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.mycompany.azyaa"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
