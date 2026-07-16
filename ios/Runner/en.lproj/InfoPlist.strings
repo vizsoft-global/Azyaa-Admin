@@ -1,0 +1,5 @@
+NSCameraUsageDescription = "for prfile photo.";
+NSPhotoLibraryUsageDescription = "for order photo.";
+NSLocationWhenInUseUsageDescription = "for order.";
+PermissionGroupNotification = "for order updates.";
+NSContactsUsageDescription = "for order.";
