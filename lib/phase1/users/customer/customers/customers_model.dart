@@ -17,6 +17,19 @@ class CustomersModel extends FlutterFlowModel<CustomersWidget> {
 
   String searchStatus = 'Hide';
 
+  // Date range filter for the customers table (matches orders/users page).
+  String dateFilter = 'All';
+  DateTime? customRangeStart;
+  DateTime? customRangeEnd;
+  FormFieldController<String>? dateFilterController;
+
+  FormFieldController<String>? statusFilterController;
+
+  // Infinite-scroll windowing for the customers table.
+  int visibleCount = 50;
+  static const int initialVisibleCount = 50;
+  static const int loadMoreStep = 100;
+
   String permissionKey = 'customer';
 
   String permissionKeyEdit = 'customer_edit';

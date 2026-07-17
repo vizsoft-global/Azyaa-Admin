@@ -17,6 +17,19 @@ class UsersModel extends FlutterFlowModel<UsersWidget> {
 
   String searchStatus = 'Hide';
 
+  // Date range filter for the users table (matches orders page).
+  String dateFilter = 'All';
+  DateTime? customRangeStart;
+  DateTime? customRangeEnd;
+  FormFieldController<String>? dateFilterController;
+
+  FormFieldController<String>? statusFilterController;
+
+  // Infinite-scroll windowing for the users table (matches orders page).
+  int visibleCount = 50;
+  static const int initialVisibleCount = 50;
+  static const int loadMoreStep = 100;
+
   String permissionKey = 'customer';
 
   String permissionKeyEdit = 'customer_edit';

@@ -8,7 +8,7 @@ import '/flutter_flow/flutter_flow_util.dart';
 class ChipData {
   const ChipData(this.label, [this.iconData]);
   final String label;
-  final IconData? iconData;
+  final Object? iconData;
 }
 
 class ChipStyle {
@@ -129,11 +129,17 @@ class _FlutterFlowChoiceChipsState extends State<FlutterFlowChoiceChips> {
             ),
             labelPadding: style.labelPadding,
             avatar: option.iconData != null
-                ? FaIcon(
-                    option.iconData,
-                    size: style.iconSize,
-                    color: style.iconColor,
-                  )
+                ? (option.iconData is FaIconData
+                    ? FaIcon(
+                        option.iconData as FaIconData,
+                        size: style.iconSize,
+                        color: style.iconColor,
+                      )
+                    : Icon(
+                        option.iconData as IconData,
+                        size: style.iconSize,
+                        color: style.iconColor,
+                      ))
                 : null,
             elevation: style.elevation,
             disabledColor: widget.disabledColor,

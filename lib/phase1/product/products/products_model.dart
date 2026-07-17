@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 class ProductsModel extends FlutterFlowModel<ProductsWidget> {
   ///  Local state fields for this page.
 
-  String productFilters = 'All';
+  String productFilters = 'all';
 
   String searchStatus = 'Hide';
 
@@ -27,6 +27,29 @@ class ProductsModel extends FlutterFlowModel<ProductsWidget> {
   String permissionKeyAdd = 'product_add';
 
   int loop = 1;
+
+  // Designer filter (from the top dropdown). Empty/null = All Designers.
+  String? designerFilterId;
+  FormFieldController<String>? designerFilterController;
+
+  // Date range filter for the products table.
+  // One of: All, Today, Yesterday, This Week, This Month, Custom.
+  String dateFilter = 'All';
+  DateTime? customRangeStart;
+  DateTime? customRangeEnd;
+  FormFieldController<String>? dateFilterController;
+
+  // Column sorting for price / stock / sales headers.
+  // sortField: '' (default created_at desc), 'price', 'stock', or 'sales'.
+  String sortField = '';
+  bool sortAscending = true;
+
+  // Infinite-scroll windowing (matches orders page).
+  int visibleCount = 50;
+  static const int initialVisibleCount = 50;
+  static const int loadMoreStep = 100;
+
+  FormFieldController<String>? statusFilterController;
 
   ///  State fields for stateful widgets in this page.
 
