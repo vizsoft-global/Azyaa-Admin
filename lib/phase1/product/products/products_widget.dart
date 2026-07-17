@@ -13,6 +13,7 @@ import '/phase1/component/azyaa_responsive/azyaa_responsive_widget.dart';
 import '/phase1/component/azyaa_sidebar/azyaa_sidebar_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
+import '/phase1/order/orders/orders_widget.dart' show AzyaaDateRangePickerDialog;
 import '/phase1/product/product_preview/product_preview_widget.dart';
 import '/phase1/product/product_quick_edit/product_quick_edit_widget.dart';
 import '/phase1/product/products_grid/products_grid_widget.dart';
@@ -429,25 +430,11 @@ class _ProductsWidgetState extends State<ProductsWidget> {
   }
 
   Future<void> _pickProductDateRange() async {
-    final now = DateTime.now();
-    final picked = await showDateRangePicker(
+    final picked = await showDialog<DateTimeRange>(
       context: context,
-      firstDate: DateTime(now.year - 5),
-      lastDate: now,
-      initialDateRange:
-          (_model.customRangeStart != null && _model.customRangeEnd != null)
-              ? DateTimeRange(
-                  start: _model.customRangeStart!,
-                  end: _model.customRangeEnd!,
-                )
-              : null,
-      builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: FlutterFlowTheme.of(context).primary,
-              ),
-        ),
-        child: child!,
+      builder: (dialogContext) => AzyaaDateRangePickerDialog(
+        initialStart: _model.customRangeStart,
+        initialEnd: _model.customRangeEnd,
       ),
     );
     if (picked != null) {
@@ -456,11 +443,13 @@ class _ProductsWidgetState extends State<ProductsWidget> {
         _model.customRangeEnd = picked.end;
         _model.dateFilter = 'Custom';
         _model.dateFilterController?.value = 'Custom';
+        _resetProductsWindow();
       });
     } else if (_model.customRangeStart == null) {
       safeSetState(() {
         _model.dateFilter = 'All';
-        _model.dateFilterController?.value = 'All';
+        _model.dateFilterController?.value = null;
+        _resetProductsWindow();
       });
     }
   }
