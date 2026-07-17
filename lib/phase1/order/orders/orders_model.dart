@@ -18,6 +18,40 @@ class OrdersModel extends FlutterFlowModel<OrdersWidget> {
 
   String permissionKey = 'order';
 
+  // Date range filter for the orders table.
+  // One of: All, Today, Yesterday, This Week, This Month, Custom.
+  String dateFilter = 'All';
+  DateTime? customRangeStart;
+  DateTime? customRangeEnd;
+
+  // Column sorting for the main orders table.
+  // sortField: '' (default created_at desc), 'items', or 'payment'.
+  String sortField = '';
+  bool sortAscending = true;
+
+  // Infinite-scroll windowing: render 50 rows first, then +100 per load.
+  int visibleCount = 50;
+  static const int initialVisibleCount = 50;
+  static const int loadMoreStep = 100;
+
+  // Controllers for the status/date filter dropdowns.
+  FormFieldController<String>? statusFilterController;
+  FormFieldController<String>? dateFilterController;
+
+  // Product-scope filters chosen from the Filters dialog.
+  String? filterDesignerId;
+  String? filterDesignerName;
+  String? filterProductId;
+  String? filterProductName;
+
+  bool get hasProductFilters =>
+      (filterDesignerId != null && filterDesignerId!.isNotEmpty) ||
+      (filterProductId != null && filterProductId!.isNotEmpty);
+
+  int get activeProductFilterCount =>
+      ((filterDesignerId != null && filterDesignerId!.isNotEmpty) ? 1 : 0) +
+      ((filterProductId != null && filterProductId!.isNotEmpty) ? 1 : 0);
+
   List<String> adminChoicechips = [
     'All',
     'Paid',

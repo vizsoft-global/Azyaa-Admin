@@ -1,6 +1,5 @@
 import '/backend/backend.dart';
 import '/components/theme_status_checker_widget.dart';
-import '/flutter_flow/flutter_flow_choice_chips.dart';
 import '/flutter_flow/flutter_flow_data_table.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
@@ -12,12 +11,20 @@ import '/phase1/component/azyaa_sidebar/azyaa_sidebar_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
+import '/phase1/order/orders/orders_widget.dart'
+    show AzyaaDateRangePickerDialog, orderMatchesDateFilter;
+import '/custom_code/widgets/index.dart';
 import '/index.dart';
+import 'dart:convert';
+import 'dart:js_interop';
 import 'package:easy_debounce/easy_debounce.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:web/web.dart' as web;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart'
+    hide Column, Row, Border, Stack;
 import 'customers_model.dart';
 export 'customers_model.dart';
 
@@ -60,6 +67,463 @@ class _CustomersWidgetState extends State<CustomersWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  bool _isExporting = false;
+  bool _isLoadingMore = false;
+
+  void _resetCustomersWindow() {
+    _model.visibleCount = CustomersModel.initialVisibleCount;
+  }
+
+  List<UsersRecord> _filteredCustomerList(
+    List<UsersRecord> allCustomers,
+    List<OrdersRecord> ordersList,
+  ) {
+    final orders = ordersList.toList();
+    final base = (_model.searchStatus == 'Show'
+            ? _model.algoliaSearchResults
+                ?.where((e) =>
+                    functions.filterUsersWithOrders(orders).contains(e.uid))
+                .toList()
+                .unique((e) => e.uid)
+            : allCustomers
+                .where((e) =>
+                    functions.filterUsersWithOrders(orders).contains(e.uid))
+                .toList()
+                .unique((e) => e.uid)) ??
+        [];
+    return base
+        .where(
+          (e) => orderMatchesDateFilter(
+            e.createdTime,
+            _model.dateFilter,
+            _model.customRangeStart,
+            _model.customRangeEnd,
+          ),
+        )
+        .toList();
+  }
+
+  Future<void> _pickCustomDateRange() async {
+    final picked = await showDialog<DateTimeRange>(
+      context: context,
+      builder: (dialogContext) => AzyaaDateRangePickerDialog(
+        initialStart: _model.customRangeStart,
+        initialEnd: _model.customRangeEnd,
+      ),
+    );
+    if (picked != null) {
+      safeSetState(() {
+        _model.customRangeStart = picked.start;
+        _model.customRangeEnd = picked.end;
+        _model.dateFilter = 'Custom';
+        _model.dateFilterController?.value = 'Custom';
+        _resetCustomersWindow();
+      });
+    } else if (_model.customRangeStart == null) {
+      safeSetState(() {
+        _model.dateFilter = 'All';
+        _model.dateFilterController?.value = 'All';
+        _resetCustomersWindow();
+      });
+    }
+  }
+
+  List<List<String>> _customersExportRows(List<UsersRecord> users) {
+    final rows = <List<String>>[
+      [
+        'Customer ID',
+        'Name',
+        'Email',
+        'Phone',
+        'Role',
+        'Status',
+        'Created At',
+      ],
+    ];
+    for (var i = 0; i < users.length; i++) {
+      final user = users[i];
+      rows.add([
+        (i + 1).toString(),
+        user.displayName.isNotEmpty ? user.displayName : '-',
+        user.email,
+        user.phoneNumber.isNotEmpty ? user.phoneNumber : '-',
+        user.userRole.isNotEmpty ? user.userRole : '-',
+        user.status,
+        DateFormat('yyyy-MM-dd HH:mm')
+            .format(user.createdTime ?? DateTime.now()),
+      ]);
+    }
+    return rows;
+  }
+
+  void _downloadBytes(Uint8List bytes, String fileName, String mimeType) {
+    final blob = web.Blob(
+      [bytes.toJS].toJS,
+      web.BlobPropertyBag(type: mimeType),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    web.URL.revokeObjectURL(url);
+  }
+
+  Future<void> _exportCustomersCsv(List<UsersRecord> users) async {
+    final rows = _customersExportRows(users);
+    final buffer = StringBuffer('\uFEFF');
+    for (final row in rows) {
+      buffer.writeln(
+        row.map((cell) => '"${cell.replaceAll('"', '""')}"').join(','),
+      );
+    }
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(utf8.encode(buffer.toString())),
+      'customers_$timestamp.csv',
+      'text/csv;charset=utf-8',
+    );
+  }
+
+  Future<void> _exportCustomersExcel(List<UsersRecord> users) async {
+    final rows = _customersExportRows(users);
+    final workbook = Workbook();
+    final sheet = workbook.worksheets[0];
+    for (var r = 0; r < rows.length; r++) {
+      for (var c = 0; c < rows[r].length; c++) {
+        sheet.getRangeByIndex(r + 1, c + 1).setText(rows[r][c]);
+      }
+    }
+    for (var c = 1; c <= rows.first.length; c++) {
+      sheet.autoFitColumn(c);
+    }
+    final bytes = workbook.saveAsStream();
+    workbook.dispose();
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(bytes),
+      'customers_$timestamp.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<void> _runExport(
+    List<UsersRecord> users,
+    Future<void> Function(List<UsersRecord>) exporter,
+  ) async {
+    if (users.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No records to export')),
+      );
+      return;
+    }
+    safeSetState(() => _isExporting = true);
+    try {
+      await exporter(users);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exported ${users.length} customers'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        safeSetState(() => _isExporting = false);
+      }
+    }
+  }
+
+  Future<void> _openCustomerDetails(UsersRecord customer) async {
+    context.pushNamed(
+      CustomerDetailsWidget.routeName,
+      queryParameters: {
+        'customer': serializeParam(
+          customer.reference,
+          ParamType.DocumentReference,
+        ),
+        'title': serializeParam(
+          'Customer',
+          ParamType.String,
+        ),
+      }.withoutNulls,
+    );
+  }
+
+  void _showCustomersExportOptions(List<UsersRecord> users) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Export Customers',
+            style: FlutterFlowTheme.of(context).headlineSmall,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  '${users.length} customers (current filters)',
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        font: GoogleFonts.inter(),
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        letterSpacing: 0.0,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.table_chart, color: Color(0xFF1D6F42)),
+                title: const Text('Export to Excel'),
+                subtitle: const Text('.xlsx format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(users, _exportCustomersExcel);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading:
+                    const Icon(Icons.description, color: Color(0xFF1976D2)),
+                title: const Text('Export to CSV'),
+                subtitle: const Text('.csv format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(users, _exportCustomersCsv);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  bool get _hasActiveCustomersFilters =>
+      _model.dateFilter != 'All' ||
+      _model.searchStatus == 'Show' ||
+      (_model.textController?.text.isNotEmpty ?? false);
+
+  void _resetAllCustomersFilters() {
+    safeSetState(() {
+      _model.dateFilter = 'All';
+      _model.dateFilterController?.value = null;
+      _model.customRangeStart = null;
+      _model.customRangeEnd = null;
+      _model.searchStatus = 'Hide';
+      _model.textController?.clear();
+      _model.algoliaSearchResults = null;
+      _resetCustomersWindow();
+    });
+  }
+
+  List<String> get _customersStatusOptions => [
+        FFLocalizations.of(context).getText(
+          'epr4belp' /* All Customers */,
+        ),
+      ];
+
+  Widget _buildCustomersStatusDropdown() {
+    return AzyaaToolbarBox(
+      width: 190.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.statusFilterController ??=
+            FormFieldController<String>(
+          _model.choiceChipsValue ??
+              FFLocalizations.of(context).getText(
+                'epr4belp' /* All Customers */,
+              ),
+        ),
+        options: _customersStatusOptions,
+        onChanged: (val) {
+          safeSetState(() {
+            _model.choiceChipsValue = val;
+            _resetCustomersWindow();
+          });
+        },
+        width: 190.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Status',
+        icon: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: FlutterFlowTheme.of(context).secondaryText,
+          size: 22.0,
+        ),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildCustomersSortDropdown() {
+    return AzyaaToolbarBox(
+      width: 120.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.dateFilterController ??=
+            FormFieldController<String>(
+          _model.dateFilter == 'All' ? null : _model.dateFilter,
+        ),
+        options: const [
+          'Today',
+          'Yesterday',
+          'This Week',
+          'This Month',
+          'Custom',
+        ],
+        onChanged: (val) async {
+          if (val == null) {
+            return;
+          }
+          if (val == 'Custom') {
+            await _pickCustomDateRange();
+          } else {
+            safeSetState(() {
+              _model.dateFilter = val;
+              _resetCustomersWindow();
+            });
+          }
+        },
+        width: 120.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Sort',
+        icon: Icon(
+          Icons.calendar_today_rounded,
+          color: FlutterFlowTheme.of(context).secondaryText,
+          size: 18.0,
+        ),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(8.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildCustomersSearchField() {
+    return TextFormField(
+      controller: _model.textController,
+      focusNode: _model.textFieldFocusNode,
+      onChanged: (_) => EasyDebounce.debounce(
+        '_model.textController',
+        Duration(milliseconds: 2000),
+        () async {
+          if (_model.textController.text != '') {
+            safeSetState(() => _model.algoliaSearchResults = null);
+            await UsersRecord.search(
+              term: _model.textController.text,
+            )
+                .then((r) => _model.algoliaSearchResults = r)
+                .onError((_, __) => _model.algoliaSearchResults = [])
+                .whenComplete(() => safeSetState(() {}));
+
+            _model.searchStatus = 'Show';
+            _resetCustomersWindow();
+            safeSetState(() {});
+          } else {
+            _model.searchStatus = 'Hide';
+            _resetCustomersWindow();
+            safeSetState(() {});
+          }
+        },
+      ),
+      autofocus: false,
+      obscureText: false,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: FFLocalizations.of(context).getText(
+          'bak00y0j' /* Search... */,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).border,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).primaryText,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).error,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).error,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        filled: true,
+        fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+        hoverColor: FlutterFlowTheme.of(context).secondaryBackground,
+        suffixIcon: Icon(
+          FFIcons.ksearch,
+          color: FlutterFlowTheme.of(context).secondaryText,
+          size: 18.0,
+        ),
+      ),
+      style: FlutterFlowTheme.of(context).bodyMedium.override(
+            font: GoogleFonts.inter(),
+            fontSize: 13.0,
+            letterSpacing: 0.0,
+          ),
+      cursorColor: FFAppState().theme.themeMain.primary,
+      validator: _model.textControllerValidator.asValidator(context),
+    );
   }
 
   @override
@@ -110,6 +574,7 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                       queryBuilder: (usersRecord) =>
                                           usersRecord.orderBy('created_time',
                                               descending: true),
+                                      limit: 500,
                                     ),
                                     builder: (context, snapshot) {
                                       // Customize what your widget looks like when it's loading.
@@ -901,6 +1366,7 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                 'updated_at',
                                                                 descending:
                                                                     true),
+                                                    limit: 500,
                                                   ),
                                                   builder: (context, snapshot) {
                                                     // Customize what your widget looks like when it's loading.
@@ -925,6 +1391,11 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                     List<OrdersRecord>
                                                         listOrdersRecordList =
                                                         snapshot.data!;
+                                                    final filteredCustomerList =
+                                                        _filteredCustomerList(
+                                                      customerUsersRecordList,
+                                                      listOrdersRecordList,
+                                                    );
 
                                                     return ClipRRect(
                                                       borderRadius:
@@ -950,328 +1421,55 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                           mainAxisSize:
                                                               MainAxisSize.max,
                                                           children: [
-                                                            Padding(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .all(
-                                                                          12.0),
-                                                              child: Row(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .max,
-                                                                children: [
-                                                                  Expanded(
-                                                                    child:
-                                                                        FlutterFlowChoiceChips(
-                                                                      options: [
-                                                                        ChipData(
-                                                                            FFLocalizations.of(context).getText(
-                                                                          'epr4belp' /* All Customers */,
-                                                                        ))
-                                                                      ],
-                                                                      onChanged:
-                                                                          (val) =>
-                                                                              safeSetState(() => _model.choiceChipsValue = val?.firstOrNull),
-                                                                      selectedChipStyle:
-                                                                          ChipStyle(
-                                                                        backgroundColor:
-                                                                            FlutterFlowTheme.of(context).alternate,
-                                                                        textStyle: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(
-                                                                                fontWeight: FontWeight.w500,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                              ),
-                                                                              color: FlutterFlowTheme.of(context).primary,
-                                                                              fontSize: 12.0,
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FontWeight.w500,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                        iconColor:
-                                                                            FlutterFlowTheme.of(context).primary,
-                                                                        iconSize:
-                                                                            0.0,
-                                                                        labelPadding:
-                                                                            EdgeInsets.all(4.0),
-                                                                        elevation:
-                                                                            0.0,
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(8.0),
-                                                                      ),
-                                                                      unselectedChipStyle:
-                                                                          ChipStyle(
-                                                                        backgroundColor:
-                                                                            FlutterFlowTheme.of(context).secondaryBackground,
-                                                                        textStyle: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(
-                                                                                fontWeight: FontWeight.w500,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                              ),
-                                                                              color: FlutterFlowTheme.of(context).secondaryText,
-                                                                              fontSize: 12.0,
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FontWeight.w500,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                        iconColor:
-                                                                            FlutterFlowTheme.of(context).primaryText,
-                                                                        iconSize:
-                                                                            0.0,
-                                                                        labelPadding:
-                                                                            EdgeInsets.all(4.0),
-                                                                        elevation:
-                                                                            0.0,
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(8.0),
-                                                                      ),
-                                                                      chipSpacing:
-                                                                          8.0,
-                                                                      rowSpacing:
-                                                                          8.0,
-                                                                      multiselect:
-                                                                          false,
-                                                                      initialized:
-                                                                          _model.choiceChipsValue !=
-                                                                              null,
-                                                                      alignment:
-                                                                          WrapAlignment
-                                                                              .start,
-                                                                      controller: _model
-                                                                              .choiceChipsValueController ??=
-                                                                          FormFieldController<
-                                                                              List<String>>(
-                                                                        [
-                                                                          FFLocalizations.of(context)
-                                                                              .getText(
-                                                                            'jt6ubwf4' /* All Customers */,
-                                                                          )
-                                                                        ],
-                                                                      ),
-                                                                      wrapped:
-                                                                          true,
-                                                                    ),
+                                                            AzyaaListToolbar(
+                                                              leftControl:
+                                                                  _buildCustomersStatusDropdown(),
+                                                              searchField:
+                                                                  _buildCustomersSearchField(),
+                                                              showingText:
+                                                                  'Showing ${_model.visibleCount.clamp(0, filteredCustomerList.length)} of ${filteredCustomerList.length}',
+                                                              trailingActions: [
+                                                                AzyaaToolbarButtons.export(
+                                                                  context: context,
+                                                                  onPressed: _isExporting
+                                                                      ? null
+                                                                      : () =>
+                                                                          _showCustomersExportOptions(
+                                                                              filteredCustomerList),
+                                                                  isExporting:
+                                                                      _isExporting,
+                                                                ),
+                                                                _buildCustomersSortDropdown(),
+                                                                AzyaaToolbarButtons.filter(
+                                                                  context: context,
+                                                                  onPressed: () {},
+                                                                  label: 'Filter',
+                                                                  active:
+                                                                      _hasActiveCustomersFilters,
+                                                                ),
+                                                              ],
+                                                              extraTrailing: [
+                                                                if ((_model.dateFilter ==
+                                                                        'Custom') &&
+                                                                    (_model.customRangeStart !=
+                                                                        null) &&
+                                                                    (_model.customRangeEnd !=
+                                                                        null))
+                                                                  Text(
+                                                                    '${DateFormat('MMM d').format(_model.customRangeStart!)} - ${DateFormat('MMM d').format(_model.customRangeEnd!)}',
+                                                                    style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                          font: GoogleFonts.inter(),
+                                                                          color: FlutterFlowTheme.of(context).secondaryText,
+                                                                          letterSpacing: 0.0,
+                                                                        ),
                                                                   ),
-                                                                  if (responsiveVisibility(
-                                                                    context:
-                                                                        context,
-                                                                    phone:
-                                                                        false,
-                                                                    tablet:
-                                                                        false,
-                                                                    tabletLandscape:
-                                                                        false,
-                                                                    desktop:
-                                                                        false,
-                                                                  ))
-                                                                    Container(
-                                                                      width:
-                                                                          180.0,
-                                                                      decoration:
-                                                                          BoxDecoration(),
-                                                                      child:
-                                                                          Material(
-                                                                        color: Colors
-                                                                            .transparent,
-                                                                        child: SwitchListTile
-                                                                            .adaptive(
-                                                                          value: _model.switchListTileValue ??=
-                                                                              true,
-                                                                          onChanged:
-                                                                              (newValue) async {
-                                                                            safeSetState(() =>
-                                                                                _model.switchListTileValue = newValue);
-                                                                          },
-                                                                          title:
-                                                                              Text(
-                                                                            FFLocalizations.of(context).getText(
-                                                                              'i1pxjgh6' /* Auto-Approval */,
-                                                                            ),
-                                                                            style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                  font: GoogleFonts.inter(
-                                                                                    fontWeight: FontWeight.w500,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                  ),
-                                                                                  letterSpacing: 0.0,
-                                                                                  fontWeight: FontWeight.w500,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                ),
-                                                                          ),
-                                                                          tileColor:
-                                                                              FlutterFlowTheme.of(context).secondaryBackground,
-                                                                          activeColor:
-                                                                              FlutterFlowTheme.of(context).alternate,
-                                                                          activeTrackColor:
-                                                                              FlutterFlowTheme.of(context).primary,
-                                                                          dense:
-                                                                              true,
-                                                                          controlAffinity:
-                                                                              ListTileControlAffinity.trailing,
-                                                                          contentPadding: EdgeInsetsDirectional.fromSTEB(
-                                                                              0.0,
-                                                                              0.0,
-                                                                              0.0,
-                                                                              0.0),
-                                                                        ),
-                                                                      ),
-                                                                    ),
-                                                                  Align(
-                                                                    alignment:
-                                                                        AlignmentDirectional(
-                                                                            0.0,
-                                                                            0.0),
-                                                                    child:
-                                                                        Container(
-                                                                      width:
-                                                                          200.0,
-                                                                      child:
-                                                                          TextFormField(
-                                                                        controller:
-                                                                            _model.textController,
-                                                                        focusNode:
-                                                                            _model.textFieldFocusNode,
-                                                                        onChanged:
-                                                                            (_) =>
-                                                                                EasyDebounce.debounce(
-                                                                          '_model.textController',
-                                                                          Duration(
-                                                                              milliseconds: 2000),
-                                                                          () async {
-                                                                            if (_model.textController.text !=
-                                                                                '') {
-                                                                              safeSetState(() => _model.algoliaSearchResults = null);
-                                                                              await UsersRecord.search(
-                                                                                term: _model.textController.text,
-                                                                              ).then((r) => _model.algoliaSearchResults = r).onError((_, __) => _model.algoliaSearchResults = []).whenComplete(() => safeSetState(() {}));
-
-                                                                              _model.searchStatus = 'Show';
-                                                                              safeSetState(() {});
-                                                                            } else {
-                                                                              _model.searchStatus = 'Hide';
-                                                                              safeSetState(() {});
-                                                                            }
-                                                                          },
-                                                                        ),
-                                                                        autofocus:
-                                                                            false,
-                                                                        obscureText:
-                                                                            false,
-                                                                        decoration:
-                                                                            InputDecoration(
-                                                                          isDense:
-                                                                              true,
-                                                                          labelStyle: FlutterFlowTheme.of(context)
-                                                                              .labelMedium
-                                                                              .override(
-                                                                                font: GoogleFonts.inter(
-                                                                                  fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                                ),
-                                                                                color: FFAppState().theme.themeMain.secondaryText,
-                                                                                letterSpacing: 0.0,
-                                                                                fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                                fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                              ),
-                                                                          hintText:
-                                                                              FFLocalizations.of(context).getText(
-                                                                            'bak00y0j' /* Search... */,
-                                                                          ),
-                                                                          hintStyle: FlutterFlowTheme.of(context)
-                                                                              .bodyMedium
-                                                                              .override(
-                                                                                font: GoogleFonts.inter(
-                                                                                  fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                ),
-                                                                                color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                letterSpacing: 0.0,
-                                                                                fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                              ),
-                                                                          enabledBorder:
-                                                                              OutlineInputBorder(
-                                                                            borderSide:
-                                                                                BorderSide(
-                                                                              color: FlutterFlowTheme.of(context).border,
-                                                                              width: 1.0,
-                                                                            ),
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          focusedBorder:
-                                                                              OutlineInputBorder(
-                                                                            borderSide:
-                                                                                BorderSide(
-                                                                              color: FlutterFlowTheme.of(context).primaryText,
-                                                                              width: 1.0,
-                                                                            ),
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          errorBorder:
-                                                                              OutlineInputBorder(
-                                                                            borderSide:
-                                                                                BorderSide(
-                                                                              color: FlutterFlowTheme.of(context).error,
-                                                                              width: 1.0,
-                                                                            ),
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          focusedErrorBorder:
-                                                                              OutlineInputBorder(
-                                                                            borderSide:
-                                                                                BorderSide(
-                                                                              color: FlutterFlowTheme.of(context).error,
-                                                                              width: 1.0,
-                                                                            ),
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          filled:
-                                                                              true,
-                                                                          fillColor: FFAppState()
-                                                                              .theme
-                                                                              .themeMain
-                                                                              .secondaryBackground,
-                                                                          hoverColor:
-                                                                              FlutterFlowTheme.of(context).secondaryBackground,
-                                                                          suffixIcon:
-                                                                              Icon(
-                                                                            FFIcons.ksearch,
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            size:
-                                                                                18.0,
-                                                                          ),
-                                                                        ),
-                                                                        style: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(
-                                                                                fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                              ),
-                                                                              color: FFAppState().theme.themeMain.primaryText,
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                        cursorColor:
-                                                                            FlutterFlowTheme.of(context).primaryText,
-                                                                        validator: _model
-                                                                            .textControllerValidator
-                                                                            .asValidator(context),
-                                                                      ),
-                                                                    ),
+                                                                if (_hasActiveCustomersFilters)
+                                                                  AzyaaToolbarButtons.reset(
+                                                                    context: context,
+                                                                    onPressed:
+                                                                        _resetAllCustomersFilters,
                                                                   ),
-                                                                ].divide(SizedBox(
-                                                                    width:
-                                                                        16.0)),
-                                                              ),
+                                                              ],
                                                             ),
                                                             Container(
                                                               width: MediaQuery
@@ -1319,8 +1517,16 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                   builder:
                                                                       (context) {
                                                                     final userListList =
-                                                                        (_model.searchStatus == 'Show' ? _model.algoliaSearchResults?.where((e) => functions.filterUsersWithOrders(listOrdersRecordList.toList()).contains(e.uid) == true).toList().unique((e) => e.uid) : customerUsersRecordList.where((e) => functions.filterUsersWithOrders(listOrdersRecordList.toList()).contains(e.uid) == true).toList().unique((e) => e.uid))?.toList() ??
-                                                                            [];
+                                                                        filteredCustomerList;
+                                                                    final windowedCustomers =
+                                                                        userListList
+                                                                            .take(_model
+                                                                                .visibleCount)
+                                                                            .toList();
+                                                                    final hasMore =
+                                                                        userListList.length >
+                                                                            windowedCustomers
+                                                                                .length;
                                                                     if (userListList
                                                                         .isEmpty) {
                                                                       return EmptyWidget(
@@ -1335,13 +1541,51 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                       );
                                                                     }
 
-                                                                    return FlutterFlowDataTable<
-                                                                        UsersRecord>(
+                                                                    return NotificationListener<
+                                                                        ScrollNotification>(
+                                                                      onNotification:
+                                                                          (notification) {
+                                                                        if (hasMore &&
+                                                                            !_isLoadingMore &&
+                                                                            _model.visibleCount <
+                                                                                userListList.length &&
+                                                                            notification.metrics.pixels >=
+                                                                                notification.metrics.maxScrollExtent -
+                                                                                    300) {
+                                                                          safeSetState(
+                                                                              () =>
+                                                                                  _isLoadingMore =
+                                                                                      true);
+                                                                          WidgetsBinding
+                                                                              .instance
+                                                                              .addPostFrameCallback(
+                                                                                  (_) {
+                                                                            if (mounted) {
+                                                                              safeSetState(
+                                                                                  () {
+                                                                                _model.visibleCount = (_model.visibleCount +
+                                                                                        CustomersModel.loadMoreStep)
+                                                                                    .clamp(0, userListList.length);
+                                                                                _isLoadingMore =
+                                                                                    false;
+                                                                              });
+                                                                            }
+                                                                          });
+                                                                        }
+                                                                        return false;
+                                                                      },
+                                                                      child: Column(
+                                                                        mainAxisSize:
+                                                                            MainAxisSize.max,
+                                                                        children: [
+                                                                          Expanded(
+                                                                            child: FlutterFlowDataTable<
+                                                                                UsersRecord>(
                                                                       controller:
                                                                           _model
                                                                               .paginatedDataTableController,
                                                                       data:
-                                                                          userListList,
+                                                                          windowedCustomers,
                                                                       columnsBuilder:
                                                                           (onSortChanged) =>
                                                                               [
@@ -1490,38 +1734,17 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                             ),
                                                                           ),
                                                                         ),
-                                                                        DataColumn2(
-                                                                          label:
-                                                                              DefaultTextStyle.merge(
-                                                                            softWrap:
-                                                                                true,
-                                                                            child:
-                                                                                Visibility(
-                                                                              visible: FFAppState().currentUserPermission.contains(_model.permissionKeyEdit) == true,
-                                                                              child: Text(
-                                                                                FFLocalizations.of(context).getText(
-                                                                                  'am3if13i' /* Actions */,
-                                                                                ),
-                                                                                style: FlutterFlowTheme.of(context).labelMedium.override(
-                                                                                      font: GoogleFonts.inter(
-                                                                                        fontWeight: FontWeight.w500,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                                      ),
-                                                                                      fontSize: 12.0,
-                                                                                      letterSpacing: 0.0,
-                                                                                      fontWeight: FontWeight.w500,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                                    ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        ),
                                                                       ],
                                                                       dataRowBuilder: (userListListItem,
                                                                               userListListIndex,
                                                                               selected,
                                                                               onSelectChanged) =>
                                                                           DataRow(
+                                                                        onSelectChanged:
+                                                                            (_) async {
+                                                                          await _openCustomerDetails(
+                                                                              userListListItem);
+                                                                        },
                                                                         cells: [
                                                                           SelectionArea(
                                                                               child: Text(
@@ -1644,49 +1867,6 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                               ),
                                                                             ),
                                                                           ),
-                                                                          Visibility(
-                                                                            visible:
-                                                                                FFAppState().currentUserPermission.contains(_model.permissionKeyEdit) == true,
-                                                                            child:
-                                                                                InkWell(
-                                                                              splashColor: Colors.transparent,
-                                                                              focusColor: Colors.transparent,
-                                                                              hoverColor: Colors.transparent,
-                                                                              highlightColor: Colors.transparent,
-                                                                              onTap: () async {
-                                                                                context.pushNamed(
-                                                                                  CustomerDetailsWidget.routeName,
-                                                                                  queryParameters: {
-                                                                                    'customer': serializeParam(
-                                                                                      userListListItem.reference,
-                                                                                      ParamType.DocumentReference,
-                                                                                    ),
-                                                                                    'title': serializeParam(
-                                                                                      'Customer',
-                                                                                      ParamType.String,
-                                                                                    ),
-                                                                                  }.withoutNulls,
-                                                                                );
-                                                                              },
-                                                                              child: Text(
-                                                                                FFLocalizations.of(context).getText(
-                                                                                  'a1gx0dnb' /* View Details */,
-                                                                                ),
-                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                      font: GoogleFonts.inter(
-                                                                                        fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                      ),
-                                                                                      color: Color(0xFF005DC0),
-                                                                                      fontSize: 12.0,
-                                                                                      letterSpacing: 0.0,
-                                                                                      fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                      decoration: TextDecoration.underline,
-                                                                                    ),
-                                                                              ),
-                                                                            ),
-                                                                          ),
                                                                         ]
                                                                             .map((c) =>
                                                                                 DataCell(c))
@@ -1705,11 +1885,11 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                         ),
                                                                       ),
                                                                       paginated:
-                                                                          true,
+                                                                          false,
                                                                       selectable:
                                                                           false,
                                                                       hidePaginator:
-                                                                          false,
+                                                                          true,
                                                                       showFirstLastButtons:
                                                                           true,
                                                                       headingRowHeight:
@@ -1742,6 +1922,49 @@ class _CustomersWidgetState extends State<CustomersWidget> {
                                                                           1.0,
                                                                       addVerticalDivider:
                                                                           false,
+                                                                            ),
+                                                                          ),
+                                                                          if (userListList
+                                                                                  .isNotEmpty &&
+                                                                              _isLoadingMore)
+                                                                            Container(
+                                                                              width:
+                                                                                  double.infinity,
+                                                                              padding: const EdgeInsets
+                                                                                  .symmetric(
+                                                                                  vertical:
+                                                                                      10.0),
+                                                                              alignment:
+                                                                                  Alignment.center,
+                                                                              child: Row(
+                                                                                mainAxisAlignment:
+                                                                                    MainAxisAlignment.center,
+                                                                                children: [
+                                                                                  SizedBox(
+                                                                                    width: 14.0,
+                                                                                    height: 14.0,
+                                                                                    child: CircularProgressIndicator(
+                                                                                      strokeWidth: 2.0,
+                                                                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                                                                        FlutterFlowTheme.of(context).primary,
+                                                                                      ),
+                                                                                    ),
+                                                                                  ),
+                                                                                  const SizedBox(
+                                                                                      width: 8.0),
+                                                                                  Text(
+                                                                                    'Loading more...',
+                                                                                    style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                          font: GoogleFonts.inter(),
+                                                                                          color: FlutterFlowTheme.of(context).secondaryText,
+                                                                                          letterSpacing: 0.0,
+                                                                                        ),
+                                                                                  ),
+                                                                                ],
+                                                                              ),
+                                                                            ),
+                                                                        ],
+                                                                      ),
                                                                     );
                                                                   },
                                                                 ),

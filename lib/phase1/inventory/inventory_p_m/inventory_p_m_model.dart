@@ -85,6 +85,22 @@ class InventoryPMModel extends FlutterFlowModel<InventoryPMWidget> {
 
   String searchStatus = 'Hide';
 
+  // Infinite-scroll windowing for inventory tables (matches orders page).
+  int visibleCount = 50;
+  static const int initialVisibleCount = 50;
+  static const int loadMoreStep = 100;
+
+  // Date range filter for inventory sort dropdown.
+  String dateFilter = 'All';
+  DateTime? customRangeStart;
+  DateTime? customRangeEnd;
+  FormFieldController<String>? dateFilterController;
+  FormFieldController<String>? statusFilterController;
+
+  // Designer filter (from the top dropdown). Empty/null = All Designers.
+  String? designerFilterId;
+  FormFieldController<String>? designerFilterController;
+
   ///  State fields for stateful widgets in this page.
 
   // Model for azyaa_sidebar component.

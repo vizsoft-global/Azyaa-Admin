@@ -80,7 +80,7 @@ dependencies:
     git:
       url: https://github.com/FlutterFlow/flutterflow_colorpicker.git
       ref: v0.0.1+1
-  font_awesome_flutter: 10.7.0
+  font_awesome_flutter: 11.0.0
   from_css_color: 2.0.0
   geolocator: 14.0.1
   geolocator_android: 5.0.1+1
@@ -116,7 +116,7 @@ dependencies:
   json_path: 0.7.2
   mime_type: 1.0.0
   package_info_plus: ^8.0.2
-  page_transition: 2.1.0
+  page_transition: 2.2.2
   path_provider: 2.1.4
   path_provider_android: 2.2.10
   path_provider_foundation: 2.4.0

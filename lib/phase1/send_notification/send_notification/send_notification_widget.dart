@@ -2332,7 +2332,7 @@ class _SendNotificationWidgetState extends State<SendNotificationWidget> {
                                                                                   ),
                                                                                   filled: true,
                                                                                   fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                                  prefixIcon: Icon(
+                                                                                  prefixIcon: FaIcon(
                                                                                     FontAwesomeIcons.link,
                                                                                     color: FlutterFlowTheme.of(context).primaryText,
                                                                                   ),
@@ -2481,7 +2481,7 @@ class _SendNotificationWidgetState extends State<SendNotificationWidget> {
                                                                                   ),
                                                                                   filled: true,
                                                                                   fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                                  prefixIcon: Icon(
+                                                                                  prefixIcon: FaIcon(
                                                                                     FontAwesomeIcons.link,
                                                                                     color: FlutterFlowTheme.of(context).primaryText,
                                                                                   ),

@@ -1,8 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/theme_status_checker_widget.dart';
-import '/flutter_flow/flutter_flow_choice_chips.dart';
 import '/flutter_flow/flutter_flow_data_table.dart';
+import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -14,6 +14,9 @@ import '/phase1/inventory/adjust_alert_threshold/adjust_alert_threshold_widget.d
 import '/phase1/inventory/restock_request/restock_request_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
+import '/phase1/order/orders/orders_widget.dart'
+    show AzyaaDateRangePickerDialog, orderMatchesDateFilter;
+import '/custom_code/widgets/index.dart';
 import '/index.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:collection/collection.dart';
@@ -24,6 +27,11 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
+import 'dart:convert';
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart'
+    hide Column, Row, Border, Stack;
 import 'inventory_p_m_model.dart';
 export 'inventory_p_m_model.dart';
 
@@ -53,10 +61,23 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
           true) {
         context.goNamed(Error404Widget.routeName);
       }
+      // Default status so a table branch renders on first load (null hides all).
+      if (_model.choiceChipsValue == null || _model.choiceChipsValue!.isEmpty) {
+        final allLabel =
+            FFLocalizations.of(context).getText('7e5lng7r' /* All */);
+        _model.choiceChipsValue = allLabel;
+        _model.statusFilterController?.value = allLabel;
+        safeSetState(() {});
+      }
     });
 
     _model.searchTextController ??= TextEditingController();
     _model.searchFocusNode ??= FocusNode();
+
+    _designersFuture = queryUsersRecordOnce(
+      queryBuilder: (usersRecord) =>
+          usersRecord.where('user_role', isEqualTo: 'Designer'),
+    );
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
@@ -66,6 +87,615 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+
+  late Future<List<UsersRecord>> _designersFuture;
+  bool _isExporting = false;
+  bool _isLoadingMore = false;
+
+  void _resetInventoryWindow() {
+    _model.visibleCount = InventoryPMModel.initialVisibleCount;
+  }
+
+  bool get _hasActiveInventoryFilters {
+    final chip = _model.choiceChipsValue;
+    final chipActive =
+        chip != null && chip.isNotEmpty && chip != 'All' && chip != 'الجميع';
+    return chipActive ||
+        (_model.designerFilterId != null &&
+            _model.designerFilterId!.isNotEmpty) ||
+        _model.dateFilter != 'All' ||
+        _model.searchStatus == 'Show' ||
+        (_model.searchTextController?.text.isNotEmpty ?? false);
+  }
+
+  bool get _isAllStatusChip {
+    final chip = _model.choiceChipsValue;
+    return chip == null ||
+        chip.isEmpty ||
+        chip == 'All' ||
+        chip == 'الجميع';
+  }
+
+  void _resetAllInventoryFilters() {
+    safeSetState(() {
+      _model.choiceChipsValue = FFLocalizations.of(context).getText(
+        '7e5lng7r' /* All */,
+      );
+      _model.statusFilterController?.value = _model.choiceChipsValue;
+      _model.designerFilterId = null;
+      _model.designerFilterController?.value = '';
+      _model.dateFilter = 'All';
+      _model.dateFilterController?.value = null;
+      _model.customRangeStart = null;
+      _model.customRangeEnd = null;
+      _model.searchStatus = 'Hide';
+      _model.searchTextController?.clear();
+      _model.algoliaSearchResults = null;
+      _resetInventoryWindow();
+    });
+  }
+
+  Future<void> _pickInventoryDateRange() async {
+    final picked = await showDialog<DateTimeRange>(
+      context: context,
+      builder: (dialogContext) => AzyaaDateRangePickerDialog(
+        initialStart: _model.customRangeStart,
+        initialEnd: _model.customRangeEnd,
+      ),
+    );
+    if (picked != null) {
+      safeSetState(() {
+        _model.customRangeStart = picked.start;
+        _model.customRangeEnd = picked.end;
+        _model.dateFilter = 'Custom';
+        _model.dateFilterController?.value = 'Custom';
+        _resetInventoryWindow();
+      });
+    } else if (_model.customRangeStart == null) {
+      safeSetState(() {
+        _model.dateFilter = 'All';
+        _model.dateFilterController?.value = null;
+        _resetInventoryWindow();
+      });
+    }
+  }
+
+  List<String> _inventoryStatusOptions() {
+    if ((FFAppState().currentUserRoleKey == 'designer') &&
+        (FFLocalizations.of(context).languageCode == 'en')) {
+      return _model.designerChoicehips.where((e) => e.isNotEmpty).toList();
+    } else if ((FFAppState().currentUserRoleKey == 'designer') &&
+        (FFLocalizations.of(context).languageCode == 'ar')) {
+      return _model.designerChoicehipsAR;
+    } else if ((FFAppState().currentUserRoleKey != 'designer') &&
+        (FFLocalizations.of(context).languageCode == 'ar')) {
+      return _model.adminChoicechipsAR;
+    } else {
+      return _model.adminChoicechips;
+    }
+  }
+
+  Widget _buildInventoryStatusDropdown() {
+    final initialStatus = _model.choiceChipsValue ??
+        FFLocalizations.of(context).getText('7e5lng7r' /* All */);
+    if (_model.choiceChipsValue == null || _model.choiceChipsValue!.isEmpty) {
+      _model.choiceChipsValue = initialStatus;
+    }
+    return AzyaaToolbarBox(
+      width: 190.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.statusFilterController ??=
+            FormFieldController<String>(initialStatus),
+        options: _inventoryStatusOptions(),
+        onChanged: (val) async {
+          safeSetState(() {
+            _model.choiceChipsValue = val;
+            _resetInventoryWindow();
+          });
+          if ((val == 'Low Stock Alert') ||
+              (val == 'تنبيه انخفاض المخزون')) {
+            FFAppState().updateAdminFlowStruct((e) => e..stockOnHand = null);
+          }
+        },
+        width: 190.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Status',
+        icon: Icon(Icons.keyboard_arrow_down_rounded,
+            color: FlutterFlowTheme.of(context).secondaryText, size: 22.0),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildInventorySortDropdown() {
+    return AzyaaToolbarBox(
+      width: 120.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.dateFilterController ??=
+            FormFieldController<String>(
+          _model.dateFilter == 'All' ? null : _model.dateFilter,
+        ),
+        options: const [
+          'Today',
+          'Yesterday',
+          'This Week',
+          'This Month',
+          'Custom',
+        ],
+        onChanged: (val) async {
+          if (val == null) {
+            return;
+          }
+          if (val == 'Custom') {
+            await _pickInventoryDateRange();
+          } else {
+            safeSetState(() {
+              _model.dateFilter = val;
+              _resetInventoryWindow();
+            });
+          }
+        },
+        width: 120.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Sort',
+        icon: Icon(Icons.calendar_today_rounded,
+            color: FlutterFlowTheme.of(context).secondaryText, size: 18.0),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(8.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildInventorySearchField() {
+    return TextFormField(
+      controller: _model.searchTextController,
+      focusNode: _model.searchFocusNode,
+      onChanged: (_) => EasyDebounce.debounce(
+        '_model.searchTextController',
+        const Duration(milliseconds: 2000),
+        () async {
+          if (_model.searchTextController.text != '') {
+            safeSetState(() => _model.algoliaSearchResults = null);
+            await InventoryRecord.search(
+              term: _model.searchTextController.text,
+              maxResults: 10,
+            )
+                .then((r) => _model.algoliaSearchResults = r)
+                .onError((_, __) => _model.algoliaSearchResults = [])
+                .whenComplete(() => safeSetState(() {}));
+            _model.searchStatus = 'Show';
+            _resetInventoryWindow();
+            safeSetState(() {});
+          } else {
+            _model.searchStatus = 'Hide';
+            _resetInventoryWindow();
+            safeSetState(() {});
+          }
+        },
+      ),
+      autofocus: false,
+      obscureText: false,
+      decoration: InputDecoration(
+        isDense: true,
+        hintText: FFLocalizations.of(context).getText(
+          'd5iva288' /* Search by Product ID */,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).border,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+            color: FlutterFlowTheme.of(context).primaryText,
+            width: 1.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        filled: true,
+        fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+        suffixIcon: Icon(FFIcons.ksearch,
+            color: FlutterFlowTheme.of(context).secondaryText, size: 18.0),
+      ),
+      style: FlutterFlowTheme.of(context).bodyMedium.override(
+            font: GoogleFonts.inter(),
+            fontSize: 13.0,
+            letterSpacing: 0.0,
+          ),
+      cursorColor: FlutterFlowTheme.of(context).primaryText,
+      validator: _model.searchTextControllerValidator.asValidator(context),
+    );
+  }
+
+  Widget _buildInventoryDesignerDropdown() {
+    return AzyaaToolbarBox(
+      width: 200.0,
+      height: 40.0,
+      child: FutureBuilder<List<UsersRecord>>(
+        future: _designersFuture,
+        builder: (context, snapshot) {
+          final designers = snapshot.data ?? <UsersRecord>[];
+          final sorted = designers.where((u) => u.uid.isNotEmpty).toList()
+            ..sort((a, b) => (a.designerMainInfo.designerInfo.name.isNotEmpty
+                    ? a.designerMainInfo.designerInfo.name
+                    : a.displayName)
+                .toLowerCase()
+                .compareTo((b.designerMainInfo.designerInfo.name.isNotEmpty
+                        ? b.designerMainInfo.designerInfo.name
+                        : b.displayName)
+                    .toLowerCase()));
+          final options = ['', ...sorted.map((u) => u.uid)];
+          final optionLabels = [
+            'All Designers',
+            ...sorted.map((u) => u.designerMainInfo.designerInfo.name.isNotEmpty
+                ? u.designerMainInfo.designerInfo.name
+                : (u.displayName.isNotEmpty ? u.displayName : u.uid)),
+          ];
+          return FlutterFlowDropDown<String>(
+            controller: _model.designerFilterController ??=
+                FormFieldController<String>(_model.designerFilterId ?? ''),
+            options: options,
+            optionLabels: optionLabels,
+            onChanged: (val) {
+              safeSetState(() {
+                _model.designerFilterId =
+                    (val == null || val.isEmpty) ? null : val;
+                _resetInventoryWindow();
+              });
+            },
+            width: 200.0,
+            height: 40.0,
+            textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                  font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  fontSize: 12.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w500,
+                ),
+            hintText: 'All Designers',
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: FlutterFlowTheme.of(context).secondaryText,
+              size: 22.0,
+            ),
+            elevation: 2.0,
+            borderColor: Colors.transparent,
+            borderWidth: 0.0,
+            borderRadius: 8.0,
+            margin: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 8.0, 0.0),
+            hidesUnderline: true,
+            isOverButton: false,
+            isSearchable: true,
+            isMultiSelect: false,
+          );
+        },
+      ),
+    );
+  }
+
+  /// Same role/status rules as the on-screen inventory tables.
+  bool _inventoryMatchesStatus(
+    InventoryRecord e, {
+    required bool fromSearch,
+  }) {
+    final chip = _model.choiceChipsValue;
+    final isDesigner = FFAppState().currentUserRoleKey == 'designer';
+    final stockValue = fromSearch ? e.stockOnHand : e.stock;
+
+    if (isDesigner) {
+      if (e.designerUid != currentUserUid) return false;
+      if (chip == 'Low Stock Alert' || chip == 'تنبيه انخفاض المخزون') {
+        return e.isPreferredVendor == true &&
+            e.status == 'active' &&
+            e.thresholdStock >= stockValue;
+      }
+      if (chip == 'Active' || chip == 'نشيط') {
+        return e.isPreferredVendor == true && e.status == 'active';
+      }
+      if (chip == 'Inactive' || chip == 'غير نشط') {
+        return e.isPreferredVendor == true && e.status != 'active';
+      }
+      return e.isPreferredVendor == true;
+    }
+
+    if (_model.designerFilterId != null &&
+        _model.designerFilterId!.isNotEmpty &&
+        e.designerUid != _model.designerFilterId) {
+      return false;
+    }
+    if ((chip == 'Stock Managed by Azyaa') ||
+        (chip == 'الأسهم التي تديرها Azyaa')) {
+      return e.isPreferredVendor == true;
+    }
+    if ((chip == 'Stock Managed by Designer') ||
+        (chip == 'الأسهم التي يديرها المصمم')) {
+      return e.isPreferredVendor == false;
+    }
+    if (chip == 'Active' || chip == 'نشيط') {
+      return e.isPreferredVendor == true && e.status == 'active';
+    }
+    if (chip == 'Inactive' || chip == 'غير نشط') {
+      return e.isPreferredVendor == true && e.status != 'active';
+    }
+    if (chip == 'Low Stock Alert' || chip == 'تنبيه انخفاض المخزون') {
+      return e.isPreferredVendor == true &&
+          e.status == 'active' &&
+          e.thresholdStock >= stockValue;
+    }
+    return true;
+  }
+
+  /// Filtered set used by Showing + Export (mirrors orders `mainFilteredOrders`).
+  List<InventoryRecord> _buildMainFilteredInventory(
+    List<InventoryRecord> source,
+  ) {
+    final fromSearch = _model.searchStatus == 'Show';
+    final base =
+        fromSearch ? (_model.algoliaSearchResults ?? <InventoryRecord>[]) : source;
+    return base
+        .where(
+          (e) => orderMatchesDateFilter(
+            e.updatedAt,
+            _model.dateFilter,
+            _model.customRangeStart,
+            _model.customRangeEnd,
+          ),
+        )
+        .where((e) => _inventoryMatchesStatus(e, fromSearch: fromSearch))
+        .toList()
+        .sortedList(
+          keyOf: (e) => e.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+          desc: true,
+        );
+  }
+
+  void _downloadBytes(Uint8List bytes, String fileName, String mimeType) {
+    final blob = web.Blob(
+      [bytes.toJS].toJS,
+      web.BlobPropertyBag(type: mimeType),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    web.URL.revokeObjectURL(url);
+  }
+
+  List<List<String>> _inventoryExportRows(List<InventoryRecord> inventory) {
+    final rows = <List<String>>[
+      [
+        'Inventory ID',
+        'Product ID',
+        'SKU',
+        'Stock',
+        'Stock On Hand',
+        'Threshold',
+        'Status',
+        'Stock Source',
+        'Updated At',
+      ],
+    ];
+    for (final e in inventory) {
+      rows.add([
+        e.inventoryId,
+        e.productId,
+        e.productSku,
+        e.stock.toString(),
+        e.stockOnHand.toString(),
+        e.thresholdStock.toString(),
+        e.status,
+        e.stockSource.isNotEmpty
+            ? e.stockSource
+            : (e.isPreferredVendor ? 'Azyaa' : 'Designer'),
+        e.updatedAt != null
+            ? DateFormat('yyyy-MM-dd HH:mm').format(e.updatedAt!)
+            : '',
+      ]);
+    }
+    return rows;
+  }
+
+  Future<void> _exportInventoryCsv(List<InventoryRecord> inventory) async {
+    final rows = _inventoryExportRows(inventory);
+    final buffer = StringBuffer('\uFEFF');
+    for (final row in rows) {
+      buffer.writeln(
+        row.map((cell) => '"${cell.replaceAll('"', '""')}"').join(','),
+      );
+    }
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(utf8.encode(buffer.toString())),
+      'inventory_$timestamp.csv',
+      'text/csv;charset=utf-8',
+    );
+  }
+
+  Future<void> _exportInventoryExcel(List<InventoryRecord> inventory) async {
+    final rows = _inventoryExportRows(inventory);
+    final workbook = Workbook();
+    final sheet = workbook.worksheets[0];
+    for (var r = 0; r < rows.length; r++) {
+      for (var c = 0; c < rows[r].length; c++) {
+        final range = sheet.getRangeByIndex(r + 1, c + 1);
+        if (r > 0 && (c == 3 || c == 4 || c == 5)) {
+          range.setNumber(double.tryParse(rows[r][c]) ?? 0);
+        } else {
+          range.setText(rows[r][c]);
+        }
+      }
+    }
+    for (var c = 1; c <= rows.first.length; c++) {
+      sheet.autoFitColumn(c);
+    }
+    final bytes = workbook.saveAsStream();
+    workbook.dispose();
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(bytes),
+      'inventory_$timestamp.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<void> _runExport(
+    List<InventoryRecord> inventory,
+    Future<void> Function(List<InventoryRecord>) exporter,
+  ) async {
+    if (inventory.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No records to export')),
+      );
+      return;
+    }
+    safeSetState(() => _isExporting = true);
+    try {
+      await exporter(inventory);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exported ${inventory.length} records'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        safeSetState(() => _isExporting = false);
+      }
+    }
+  }
+
+  void _showInventoryExportOptions(List<InventoryRecord> inventory) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Export Inventory',
+            style: FlutterFlowTheme.of(context).headlineSmall,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  '${inventory.length} records (current filters)',
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        font: GoogleFonts.inter(),
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        letterSpacing: 0.0,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.table_chart, color: Color(0xFF1D6F42)),
+                title: const Text('Export to Excel'),
+                subtitle: const Text('.xlsx format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(inventory, _exportInventoryExcel);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading:
+                    const Icon(Icons.description, color: Color(0xFF1976D2)),
+                title: const Text('Export to CSV'),
+                subtitle: const Text('.csv format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(inventory, _exportInventoryCsv);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _wrapInventoryScrollTable({
+    required List<InventoryRecord> fullList,
+    required Widget Function(List<InventoryRecord> windowed) builder,
+    required Widget emptyWidget,
+  }) {
+    if (fullList.isEmpty) return emptyWidget;
+    final windowed = fullList.take(_model.visibleCount).toList();
+    final hasMore = fullList.length > windowed.length;
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (hasMore &&
+            !_isLoadingMore &&
+            _model.visibleCount < fullList.length &&
+            notification.metrics.pixels >=
+                notification.metrics.maxScrollExtent - 300) {
+          safeSetState(() => _isLoadingMore = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              safeSetState(() {
+                _model.visibleCount =
+                    (_model.visibleCount + InventoryPMModel.loadMoreStep)
+                        .clamp(0, fullList.length);
+                _isLoadingMore = false;
+              });
+            }
+          });
+        }
+        return false;
+      },
+      child: builder(windowed),
+    );
   }
 
   @override
@@ -137,7 +767,25 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                       }
                                       List<InventoryRecord>
                                           inventorInventoryRecordList =
-                                          snapshot.data!;
+                                          snapshot.data!
+                                              .where((e) =>
+                                                  _model.designerFilterId ==
+                                                      null ||
+                                                  _model.designerFilterId!
+                                                      .isEmpty ||
+                                                  e.designerUid ==
+                                                      _model.designerFilterId)
+                                              .where((e) =>
+                                                  orderMatchesDateFilter(
+                                                    e.updatedAt,
+                                                    _model.dateFilter,
+                                                    _model.customRangeStart,
+                                                    _model.customRangeEnd,
+                                                  ))
+                                              .toList();
+                                      final mainFilteredInventory =
+                                          _buildMainFilteredInventory(
+                                              snapshot.data!);
 
                                       return Container(
                                         height:
@@ -605,336 +1253,77 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                   MainAxisSize
                                                                       .max,
                                                               children: [
-                                                                Padding(
-                                                                  padding:
-                                                                      EdgeInsets
-                                                                          .all(
-                                                                              12.0),
-                                                                  child: Row(
-                                                                    mainAxisSize:
-                                                                        MainAxisSize
-                                                                            .max,
+                                                                AzyaaListToolbar(
+                                                                  leftControl:
+                                                                      Row(
                                                                     children: [
-                                                                      Expanded(
-                                                                        child:
-                                                                            FlutterFlowChoiceChips(
-                                                                          options: () {
-                                                                            if ((FFAppState().currentUserRoleKey == 'designer') &&
-                                                                                (FFLocalizations.of(context).languageCode == 'en')) {
-                                                                              return _model.designerChoicehips;
-                                                                            } else if ((FFAppState().currentUserRoleKey == 'designer') && (FFLocalizations.of(context).languageCode == 'ar')) {
-                                                                              return _model.designerChoicehipsAR;
-                                                                            } else if ((FFAppState().currentUserRoleKey != 'designer') && (FFLocalizations.of(context).languageCode == 'ar')) {
-                                                                              return _model.adminChoicechipsAR;
-                                                                            } else if ((FFAppState().currentUserRoleKey != 'designer') && (FFLocalizations.of(context).languageCode == 'en')) {
-                                                                              return _model.adminChoicechips;
-                                                                            } else if (FFAppState().currentUserRoleKey == 'designer') {
-                                                                              return _model.designerChoicehips;
-                                                                            } else {
-                                                                              return _model.adminChoicechips;
-                                                                            }
-                                                                          }()
-                                                                              .map((label) => ChipData(label))
-                                                                              .toList(),
-                                                                          onChanged:
-                                                                              (val) async {
-                                                                            safeSetState(() =>
-                                                                                _model.choiceChipsValue = val?.firstOrNull);
-                                                                            if ((_model.choiceChipsValue == 'Low Stock Alert') ||
-                                                                                (_model.choiceChipsValue == 'تنبيه انخفاض المخزون')) {
-                                                                              FFAppState().updateAdminFlowStruct(
-                                                                                (e) => e..stockOnHand = null,
-                                                                              );
-                                                                            }
-                                                                          },
-                                                                          selectedChipStyle:
-                                                                              ChipStyle(
-                                                                            backgroundColor:
-                                                                                FlutterFlowTheme.of(context).alternate,
-                                                                            textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.inter(
-                                                                                    fontWeight: FontWeight.w500,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).primary,
-                                                                                  fontSize: 12.0,
-                                                                                  letterSpacing: 0.0,
-                                                                                  fontWeight: FontWeight.w500,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                ),
-                                                                            iconColor:
-                                                                                FlutterFlowTheme.of(context).primary,
-                                                                            iconSize:
-                                                                                0.0,
-                                                                            labelPadding:
-                                                                                EdgeInsets.all(4.0),
-                                                                            elevation:
-                                                                                0.0,
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          unselectedChipStyle:
-                                                                              ChipStyle(
-                                                                            backgroundColor:
-                                                                                FlutterFlowTheme.of(context).secondaryBackground,
-                                                                            textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.inter(
-                                                                                    fontWeight: FontWeight.w500,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                  fontSize: 12.0,
-                                                                                  letterSpacing: 0.0,
-                                                                                  fontWeight: FontWeight.w500,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                ),
-                                                                            iconColor:
-                                                                                FlutterFlowTheme.of(context).primaryText,
-                                                                            iconSize:
-                                                                                0.0,
-                                                                            labelPadding:
-                                                                                EdgeInsets.all(4.0),
-                                                                            elevation:
-                                                                                0.0,
-                                                                            borderRadius:
-                                                                                BorderRadius.circular(8.0),
-                                                                          ),
-                                                                          chipSpacing:
-                                                                              8.0,
-                                                                          rowSpacing:
-                                                                              8.0,
-                                                                          multiselect:
-                                                                              false,
-                                                                          initialized:
-                                                                              _model.choiceChipsValue != null,
-                                                                          alignment:
-                                                                              WrapAlignment.start,
-                                                                          controller: _model.choiceChipsValueController ??=
-                                                                              FormFieldController<List<String>>(
-                                                                            [
-                                                                              FFLocalizations.of(context).getText(
-                                                                                '7e5lng7r' /* All */,
-                                                                              )
-                                                                            ],
-                                                                          ),
-                                                                          wrapped:
-                                                                              true,
-                                                                        ),
-                                                                      ),
-                                                                      if (responsiveVisibility(
-                                                                        context:
-                                                                            context,
-                                                                        phone:
-                                                                            false,
-                                                                        tablet:
-                                                                            false,
-                                                                        tabletLandscape:
-                                                                            false,
-                                                                        desktop:
-                                                                            false,
-                                                                      ))
-                                                                        Container(
-                                                                          width:
-                                                                              180.0,
-                                                                          decoration:
-                                                                              BoxDecoration(),
-                                                                          child:
-                                                                              Material(
-                                                                            color:
-                                                                                Colors.transparent,
-                                                                            child:
-                                                                                SwitchListTile.adaptive(
-                                                                              value: _model.switchListTileValue ??= true,
-                                                                              onChanged: (newValue) async {
-                                                                                safeSetState(() => _model.switchListTileValue = newValue);
-                                                                              },
-                                                                              title: Text(
-                                                                                FFLocalizations.of(context).getText(
-                                                                                  'f8zwp1ke' /* Auto-Approval */,
-                                                                                ),
-                                                                                style: FlutterFlowTheme.of(context).bodySmall.override(
-                                                                                      font: GoogleFonts.inter(
-                                                                                        fontWeight: FontWeight.w500,
-                                                                                        fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                      ),
-                                                                                      letterSpacing: 0.0,
-                                                                                      fontWeight: FontWeight.w500,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                    ),
-                                                                              ),
-                                                                              tileColor: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                              activeColor: FlutterFlowTheme.of(context).alternate,
-                                                                              activeTrackColor: FlutterFlowTheme.of(context).primary,
-                                                                              dense: true,
-                                                                              controlAffinity: ListTileControlAffinity.trailing,
-                                                                              contentPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      Align(
-                                                                        alignment: AlignmentDirectional(
-                                                                            0.0,
-                                                                            0.0),
-                                                                        child:
-                                                                            Container(
-                                                                          width:
-                                                                              200.0,
-                                                                          child:
-                                                                              TextFormField(
-                                                                            controller:
-                                                                                _model.searchTextController,
-                                                                            focusNode:
-                                                                                _model.searchFocusNode,
-                                                                            onChanged: (_) =>
-                                                                                EasyDebounce.debounce(
-                                                                              '_model.searchTextController',
-                                                                              Duration(milliseconds: 2000),
-                                                                              () async {
-                                                                                if (_model.searchTextController.text != '') {
-                                                                                  safeSetState(() => _model.algoliaSearchResults = null);
-                                                                                  await InventoryRecord.search(
-                                                                                    term: _model.searchTextController.text,
-                                                                                    maxResults: 10,
-                                                                                  ).then((r) => _model.algoliaSearchResults = r).onError((_, __) => _model.algoliaSearchResults = []).whenComplete(() => safeSetState(() {}));
-
-                                                                                  _model.searchStatus = 'Show';
-                                                                                  safeSetState(() {});
-                                                                                } else {
-                                                                                  _model.searchStatus = 'Hide';
-                                                                                  safeSetState(() {});
-                                                                                }
-                                                                              },
-                                                                            ),
-                                                                            autofocus:
-                                                                                false,
-                                                                            obscureText:
-                                                                                false,
-                                                                            decoration:
-                                                                                InputDecoration(
-                                                                              isDense: true,
-                                                                              labelStyle: FlutterFlowTheme.of(context).labelMedium.override(
-                                                                                    font: GoogleFonts.inter(
-                                                                                      fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                                    ),
-                                                                                    letterSpacing: 0.0,
-                                                                                    fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                                  ),
-                                                                              hintText: FFLocalizations.of(context).getText(
-                                                                                'd5iva288' /* Search by Product ID */,
-                                                                              ),
-                                                                              hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                    font: GoogleFonts.inter(
-                                                                                      fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                    ),
-                                                                                    color: FlutterFlowTheme.of(context).primaryText,
-                                                                                    fontSize: 12.0,
-                                                                                    letterSpacing: 0.0,
-                                                                                    fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                              enabledBorder: OutlineInputBorder(
-                                                                                borderSide: BorderSide(
-                                                                                  color: FlutterFlowTheme.of(context).border,
-                                                                                  width: 1.0,
-                                                                                ),
-                                                                                borderRadius: BorderRadius.circular(8.0),
-                                                                              ),
-                                                                              focusedBorder: OutlineInputBorder(
-                                                                                borderSide: BorderSide(
-                                                                                  color: FlutterFlowTheme.of(context).primary,
-                                                                                  width: 1.0,
-                                                                                ),
-                                                                                borderRadius: BorderRadius.circular(8.0),
-                                                                              ),
-                                                                              errorBorder: OutlineInputBorder(
-                                                                                borderSide: BorderSide(
-                                                                                  color: FlutterFlowTheme.of(context).error,
-                                                                                  width: 1.0,
-                                                                                ),
-                                                                                borderRadius: BorderRadius.circular(8.0),
-                                                                              ),
-                                                                              focusedErrorBorder: OutlineInputBorder(
-                                                                                borderSide: BorderSide(
-                                                                                  color: FlutterFlowTheme.of(context).error,
-                                                                                  width: 1.0,
-                                                                                ),
-                                                                                borderRadius: BorderRadius.circular(8.0),
-                                                                              ),
-                                                                              filled: true,
-                                                                              fillColor: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                              hoverColor: FlutterFlowTheme.of(context).secondaryBackground,
-                                                                              suffixIcon: Icon(
-                                                                                FFIcons.ksearch,
-                                                                                color: FlutterFlowTheme.of(context).secondaryText,
-                                                                                size: 16.0,
-                                                                              ),
-                                                                            ),
-                                                                            style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                  font: GoogleFonts.inter(
-                                                                                    fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                  ),
-                                                                                  color: FlutterFlowTheme.of(context).primaryText,
-                                                                                  fontSize: 12.0,
-                                                                                  letterSpacing: 0.0,
-                                                                                  fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                ),
-                                                                            cursorColor:
-                                                                                FlutterFlowTheme.of(context).primaryText,
-                                                                            validator:
-                                                                                _model.searchTextControllerValidator.asValidator(context),
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                      if (responsiveVisibility(
-                                                                        context:
-                                                                            context,
-                                                                        phone:
-                                                                            false,
-                                                                        tablet:
-                                                                            false,
-                                                                        tabletLandscape:
-                                                                            false,
-                                                                        desktop:
-                                                                            false,
-                                                                      ))
-                                                                        FlutterFlowIconButton(
-                                                                          borderColor:
-                                                                              FlutterFlowTheme.of(context).buttonBorder,
-                                                                          borderRadius:
-                                                                              8.0,
-                                                                          buttonSize:
-                                                                              40.0,
-                                                                          fillColor:
-                                                                              FlutterFlowTheme.of(context).secondaryBackground,
-                                                                          icon:
-                                                                              Icon(
-                                                                            Icons.format_list_bulleted,
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).primaryText,
-                                                                            size:
-                                                                                24.0,
-                                                                          ),
-                                                                          onPressed:
-                                                                              () async {
-                                                                            if (_model.styleName ==
-                                                                                'List') {
-                                                                              _model.styleName = 'Grid';
-                                                                              safeSetState(() {});
-                                                                            } else {
-                                                                              _model.styleName = 'List';
-                                                                              safeSetState(() {});
-                                                                            }
-                                                                          },
-                                                                        ),
-                                                                    ].divide(SizedBox(
-                                                                        width:
-                                                                            16.0)),
+                                                                      _buildInventoryStatusDropdown(),
+                                                                      if (FFAppState()
+                                                                              .currentUserRoleKey !=
+                                                                          'designer') ...[
+                                                                        const SizedBox(
+                                                                            width:
+                                                                                12.0),
+                                                                        _buildInventoryDesignerDropdown(),
+                                                                      ],
+                                                                    ],
                                                                   ),
+                                                                  searchField:
+                                                                      _buildInventorySearchField(),
+                                                                  showingText:
+                                                                      'Showing ${_model.visibleCount.clamp(0, mainFilteredInventory.length)} of ${mainFilteredInventory.length}',
+                                                                  trailingActions: [
+                                                                    AzyaaToolbarButtons.export(
+                                                                      context: context,
+                                                                      onPressed: _isExporting
+                                                                          ? null
+                                                                          : () => _showInventoryExportOptions(
+                                                                                mainFilteredInventory,
+                                                                              ),
+                                                                      isExporting: _isExporting,
+                                                                    ),
+                                                                    _buildInventorySortDropdown(),
+                                                                  ],
+                                                                  extraTrailing: [
+                                                                    if ((_model.dateFilter == 'Custom') &&
+                                                                        (_model.customRangeStart != null) &&
+                                                                        (_model.customRangeEnd != null))
+                                                                      Text(
+                                                                        '${DateFormat('MMM d').format(_model.customRangeStart!)} - ${DateFormat('MMM d').format(_model.customRangeEnd!)}',
+                                                                        style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                              font: GoogleFonts.inter(),
+                                                                              color: FlutterFlowTheme.of(context).secondaryText,
+                                                                              letterSpacing: 0.0,
+                                                                            ),
+                                                                      ),
+                                                                    if (_hasActiveInventoryFilters)
+                                                                      AzyaaToolbarButtons.reset(
+                                                                        context: context,
+                                                                        onPressed: _resetAllInventoryFilters,
+                                                                      ),
+                                                                    if (responsiveVisibility(
+                                                                      context: context,
+                                                                      phone: false,
+                                                                      tablet: false,
+                                                                      tabletLandscape: false,
+                                                                      desktop: false,
+                                                                    ))
+                                                                      FlutterFlowIconButton(
+                                                                        borderColor: FlutterFlowTheme.of(context).buttonBorder,
+                                                                        borderRadius: 8.0,
+                                                                        buttonSize: 40.0,
+                                                                        fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                        icon: Icon(
+                                                                          Icons.format_list_bulleted,
+                                                                          color: FlutterFlowTheme.of(context).primaryText,
+                                                                          size: 24.0,
+                                                                        ),
+                                                                        onPressed: () {
+                                                                          _model.styleName = _model.styleName == 'List' ? 'Grid' : 'List';
+                                                                          safeSetState(() {});
+                                                                        },
+                                                                      ),
+                                                                  ],
                                                                 ),
                                                                 Container(
                                                                   width: MediaQuery.sizeOf(
@@ -959,7 +1348,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                 if ((FFAppState()
                                                                             .currentUserRoleKey ==
                                                                         'super_admin') &&
-                                                                    (((_model.choiceChipsValue == 'All') || (_model.choiceChipsValue == 'الجميع')) ||
+                                                                    (_isAllStatusChip ||
                                                                         ((_model.choiceChipsValue ==
                                                                                 'Stock Managed by Azyaa') ||
                                                                             (_model.choiceChipsValue ==
@@ -995,7 +1384,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                           Visibility(
                                                                         visible: (FFAppState().currentUserRoleKey ==
                                                                                 'super_admin') &&
-                                                                            (((_model.choiceChipsValue == 'All') || (_model.choiceChipsValue == 'الجميع')) ||
+                                                                            (_isAllStatusChip ||
                                                                                 ((_model.choiceChipsValue == 'Stock Managed by Azyaa') || (_model.choiceChipsValue == 'الأسهم التي تديرها Azyaa')) ||
                                                                                 ((_model.choiceChipsValue == 'Stock Managed by Designer') || (_model.choiceChipsValue == 'الأسهم التي يديرها المصمم')) ||
                                                                                 ((_model.choiceChipsValue == 'Active') || (_model.choiceChipsValue == 'نشيط')) ||
@@ -1039,20 +1428,20 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                             .sortedList(keyOf: (e) => e.updatedAt!, desc: true))
                                                                                     ?.toList() ??
                                                                                 [];
-                                                                            if (inventoryList.isEmpty) {
-                                                                              return EmptyWidget(
+                                                                            return _wrapInventoryScrollTable(
+                                                                              fullList: inventoryList,
+                                                                              emptyWidget: EmptyWidget(
                                                                                 messageOne: FFLocalizations.of(context).getText(
                                                                                   'mq6wltza' /* Your product shelf is still wa... */,
                                                                                 ),
                                                                                 messageTwo: FFLocalizations.of(context).getText(
                                                                                   '2ylt5c3u' /* Manage all your listings here ... */,
                                                                                 ),
-                                                                              );
-                                                                            }
-
-                                                                            return FlutterFlowDataTable<InventoryRecord>(
+                                                                              ),
+                                                                              builder: (windowedInventoryList) =>
+                                                                                  FlutterFlowDataTable<InventoryRecord>(
                                                                               controller: _model.paginatedDataTableController1,
-                                                                              data: inventoryList,
+                                                                              data: windowedInventoryList,
                                                                               columnsBuilder: (onSortChanged) => [
                                                                                 DataColumn2(
                                                                                   label: DefaultTextStyle.merge(
@@ -1744,6 +2133,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                               horizontalDividerColor: FlutterFlowTheme.of(context).border,
                                                                               horizontalDividerThickness: 1.0,
                                                                               addVerticalDivider: false,
+                                                                            ),
                                                                             );
                                                                           },
                                                                         ),
@@ -1778,24 +2168,23 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                             (context) {
                                                                           final lowstockList =
                                                                               (_model.searchStatus == 'Show' ? _model.algoliaSearchResults?.where((e) => (e.thresholdStock >= e.stockOnHand) && ((e.isPreferredVendor == true) && (e.status == 'active'))).toList().sortedList(keyOf: (e) => e.updatedAt!, desc: true) : inventorInventoryRecordList.where((e) => (e.thresholdStock >= e.stock) && ((e.isPreferredVendor == true) && (e.status == 'active'))).toList().sortedList(keyOf: (e) => e.updatedAt!, desc: true))?.toList() ?? [];
-                                                                          if (lowstockList
-                                                                              .isEmpty) {
-                                                                            return EmptyWidget(
+                                                                          return _wrapInventoryScrollTable(
+                                                                            fullList: lowstockList,
+                                                                            emptyWidget: EmptyWidget(
+
                                                                               messageOne: FFLocalizations.of(context).getText(
                                                                                 'vxnyx5ar' /* Nothing Here Yet */,
                                                                               ),
                                                                               messageTwo: FFLocalizations.of(context).getText(
                                                                                 'nvu0r46m' /* Looks like we couldn’t find an... */,
-                                                                              ),
-                                                                            );
-                                                                          }
-
-                                                                          return FlutterFlowDataTable<
+                                                                              ),),
+                                                                            builder: (windowedLowstockList) =>
+                                                                                FlutterFlowDataTable<
                                                                               InventoryRecord>(
                                                                             controller:
                                                                                 _model.paginatedDataTableController2,
                                                                             data:
-                                                                                lowstockList,
+                                                                                windowedLowstockList,
                                                                             columnsBuilder: (onSortChanged) =>
                                                                                 [
                                                                               DataColumn2(
@@ -2378,6 +2767,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                 1.0,
                                                                             addVerticalDivider:
                                                                                 false,
+                                                                          ),
                                                                           );
                                                                         },
                                                                       ),
@@ -2386,7 +2776,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                 if ((FFAppState()
                                                                             .currentUserRoleKey ==
                                                                         'designer') &&
-                                                                    (((_model.choiceChipsValue == 'All') || (_model.choiceChipsValue == 'الجميع')) ||
+                                                                    (_isAllStatusChip ||
                                                                         ((_model.choiceChipsValue ==
                                                                                 'Stock Managed by Azyaa') ||
                                                                             (_model.choiceChipsValue ==
@@ -2449,24 +2839,23 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                           .sortedList(keyOf: (e) => e.updatedAt!, desc: true))
                                                                                   ?.toList() ??
                                                                               [];
-                                                                          if (inventoryList
-                                                                              .isEmpty) {
-                                                                            return EmptyWidget(
+                                                                          return _wrapInventoryScrollTable(
+                                                                            fullList: inventoryList,
+                                                                            emptyWidget: EmptyWidget(
+
                                                                               messageOne: FFLocalizations.of(context).getText(
                                                                                 '8ym347io' /* Oops! Nothing Here */,
                                                                               ),
                                                                               messageTwo: FFLocalizations.of(context).getText(
                                                                                 'gduu3xqj' /* We couldn’t retrieve any data ... */,
-                                                                              ),
-                                                                            );
-                                                                          }
-
-                                                                          return FlutterFlowDataTable<
+                                                                              ),),
+                                                                            builder: (windowedInventoryList) =>
+                                                                                FlutterFlowDataTable<
                                                                               InventoryRecord>(
                                                                             controller:
                                                                                 _model.paginatedDataTableController3,
                                                                             data:
-                                                                                inventoryList,
+                                                                                windowedInventoryList,
                                                                             columnsBuilder: (onSortChanged) =>
                                                                                 [
                                                                               DataColumn2(
@@ -3151,6 +3540,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                 1.0,
                                                                             addVerticalDivider:
                                                                                 false,
+                                                                          ),
                                                                           );
                                                                         },
                                                                       ),
@@ -3184,24 +3574,23 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                             (context) {
                                                                           final lowstockList =
                                                                               (_model.searchStatus == 'Show' ? _model.algoliaSearchResults?.where((e) => (e.thresholdStock >= e.stockOnHand) && (e.isPreferredVendor == true) && (e.designerUid == currentUserUid) && (e.status == 'active')).toList().sortedList(keyOf: (e) => e.updatedAt!, desc: true) : inventorInventoryRecordList.where((e) => (e.thresholdStock >= e.stock) && (e.isPreferredVendor == true) && (e.designerUid == currentUserUid) && (e.status == 'active')).toList().sortedList(keyOf: (e) => e.updatedAt!, desc: true))?.toList() ?? [];
-                                                                          if (lowstockList
-                                                                              .isEmpty) {
-                                                                            return EmptyWidget(
+                                                                          return _wrapInventoryScrollTable(
+                                                                            fullList: lowstockList,
+                                                                            emptyWidget: EmptyWidget(
+
                                                                               messageOne: FFLocalizations.of(context).getText(
                                                                                 'ebhn16j3' /* Some items are running low! */,
                                                                               ),
                                                                               messageTwo: FFLocalizations.of(context).getText(
                                                                                 'qczu3dwt' /* Keep an eye on these products—... */,
-                                                                              ),
-                                                                            );
-                                                                          }
-
-                                                                          return FlutterFlowDataTable<
+                                                                              ),),
+                                                                            builder: (windowedLowstockList) =>
+                                                                                FlutterFlowDataTable<
                                                                               InventoryRecord>(
                                                                             controller:
                                                                                 _model.paginatedDataTableController4,
                                                                             data:
-                                                                                lowstockList,
+                                                                                windowedLowstockList,
                                                                             columnsBuilder: (onSortChanged) =>
                                                                                 [
                                                                               DataColumn2(
@@ -3831,6 +4220,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                 1.0,
                                                                             addVerticalDivider:
                                                                                 false,
+                                                                          ),
                                                                           );
                                                                         },
                                                                       ),

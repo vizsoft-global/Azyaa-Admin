@@ -1,7 +1,7 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/batch_lookup_util.dart';
 import '/components/theme_status_checker_widget.dart';
-import '/flutter_flow/flutter_flow_choice_chips.dart';
 import '/flutter_flow/flutter_flow_data_table.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_icon_button.dart';
@@ -18,6 +18,7 @@ import '/phase1/product/product_quick_edit/product_quick_edit_widget.dart';
 import '/phase1/product/products_grid/products_grid_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/flutter_flow/random_data_util.dart' as random_data;
+import '/custom_code/widgets/index.dart';
 import '/index.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_debounce.dart';
@@ -26,8 +27,110 @@ import 'package:flutter/scheduler.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
+import 'dart:convert';
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart'
+    hide Column, Row, Border, Stack;
 import 'products_model.dart';
 export 'products_model.dart';
+
+/// Returns true if [when] falls inside the range described by [filter].
+/// [filter] is one of: All, Today, Yesterday, This Week, This Month, Custom.
+bool productMatchesDateFilter(
+  DateTime? when,
+  String filter,
+  DateTime? customStart,
+  DateTime? customEnd,
+) {
+  if (filter == 'All' || filter.isEmpty) {
+    return true;
+  }
+  if (when == null) {
+    return false;
+  }
+  final now = DateTime.now();
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  switch (filter) {
+    case 'Today':
+      final end = startOfToday.add(const Duration(days: 1));
+      return !when.isBefore(startOfToday) && when.isBefore(end);
+    case 'Yesterday':
+      final start = startOfToday.subtract(const Duration(days: 1));
+      return !when.isBefore(start) && when.isBefore(startOfToday);
+    case 'This Week':
+      final start =
+          startOfToday.subtract(Duration(days: startOfToday.weekday - 1));
+      final end = start.add(const Duration(days: 7));
+      return !when.isBefore(start) && when.isBefore(end);
+    case 'This Month':
+      final start = DateTime(now.year, now.month, 1);
+      final end = DateTime(now.year, now.month + 1, 1);
+      return !when.isBefore(start) && when.isBefore(end);
+    case 'Custom':
+      if (customStart == null || customEnd == null) {
+        return true;
+      }
+      final start =
+          DateTime(customStart.year, customStart.month, customStart.day);
+      final end = DateTime(customEnd.year, customEnd.month, customEnd.day)
+          .add(const Duration(days: 1));
+      return !when.isBefore(start) && when.isBefore(end);
+    default:
+      return true;
+  }
+}
+
+/// Stock for a product resolved from the active inventory list.
+int productStock(ProductsRecord p, List<InventoryRecord> inventory) {
+  final match = inventory
+      .where((e) => e.reference == p.product.inventoryRef)
+      .toList()
+      .firstOrNull;
+  return (match?.stock ?? 0).toInt();
+}
+
+/// Status-chip predicate mirroring the products table filtering, reused for
+/// the table and the export so both stay in sync.
+bool productMatchesStatusFilter(ProductsRecord e, String productFilters) {
+  final filter = productFilters.toLowerCase();
+  final isDesigner = FFAppState().currentUserRoleKey == 'designer';
+  final ownScope = e.productAuthorizer.productDesignerId == currentUserUid;
+  if (filter == 'archived') {
+    return isDesigner
+        ? (e.status == 'archived' && ownScope)
+        : e.status == 'archived';
+  } else if (filter == 'all') {
+    return isDesigner ? ownScope : true;
+  } else if (filter == 'request') {
+    return e.status == 'request';
+  } else if (filter != 'all') {
+    return isDesigner
+        ? (e.status == filter && ownScope)
+        : e.status == filter;
+  } else {
+    return isDesigner
+        ? (ownScope && e.status != 'archived')
+        : e.status != 'archived';
+  }
+}
+
+/// Wraps a sortable column header so a persistent up-arrow is always shown,
+/// signalling to the user that the column can be sorted.
+Widget sortableColumnHeader(Widget label) {
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(child: label),
+      const SizedBox(width: 6.0),
+      const Icon(
+        Icons.arrow_upward_rounded,
+        size: 14.0,
+        color: Color(0xFF616161),
+      ),
+    ],
+  );
+}
 
 class ProductsWidget extends StatefulWidget {
   const ProductsWidget({super.key});
@@ -60,6 +163,11 @@ class _ProductsWidgetState extends State<ProductsWidget> {
     _model.searchTextController ??= TextEditingController();
     _model.searchFocusNode ??= FocusNode();
 
+    _designersFuture = queryUsersRecordOnce(
+      queryBuilder: (usersRecord) =>
+          usersRecord.where('user_role', isEqualTo: 'Designer'),
+    );
+
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
 
@@ -68,6 +176,626 @@ class _ProductsWidgetState extends State<ProductsWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  late Future<List<UsersRecord>> _designersFuture;
+  bool _isExporting = false;
+  bool _isLoadingMore = false;
+  String? _productDesignerLookupKey;
+  Future<Map<String, UsersRecord>>? _productDesignerLookupFuture;
+
+  Future<Map<String, UsersRecord>> _productDesignersLookupFuture(
+    List<ProductsRecord> products,
+  ) {
+    final key = products.map((p) => p.reference.id).join(',');
+    if (_productDesignerLookupKey != key ||
+        _productDesignerLookupFuture == null) {
+      _productDesignerLookupKey = key;
+      final uids = products
+          .map((p) => p.productAuthorizer.productDesignerId)
+          .where((uid) => uid.isNotEmpty)
+          .toList();
+      _productDesignerLookupFuture = batchFetchUsersByUid(uids);
+    }
+    return _productDesignerLookupFuture!;
+  }
+
+  void _resetProductsWindow() {
+    _model.visibleCount = ProductsModel.initialVisibleCount;
+  }
+
+  String _productsStatusLabel(String filter) {
+    switch (filter.toLowerCase()) {
+      case 'active':
+        return FFLocalizations.of(context).getText('1o6znrc0' /* Active */);
+      case 'inactive':
+        return FFLocalizations.of(context).getText('b974f0q8' /* Inactive */);
+      case 'draft':
+        return FFLocalizations.of(context).getText('b7gsdgle' /* Draft */);
+      case 'archived':
+        return FFLocalizations.of(context).getText('3dm26jhd' /* Archived */);
+      case 'request':
+        return FFAppState().currentUserRoleKey == 'designer'
+            ? ''
+            : FFLocalizations.of(context).getVariableText(
+                enText: 'Request',
+                arText: 'طلب',
+              );
+      default:
+        return FFLocalizations.of(context).getText('2p0kruhq' /* All */);
+    }
+  }
+
+  String _productsFilterFromLabel(String? label) {
+    if (label == null || label.isEmpty) {
+      return 'all';
+    }
+    final active = FFLocalizations.of(context).getText('1o6znrc0');
+    final inactive = FFLocalizations.of(context).getText('b974f0q8');
+    final draft = FFLocalizations.of(context).getText('b7gsdgle');
+    final archived = FFLocalizations.of(context).getText('3dm26jhd');
+    final request = FFLocalizations.of(context).getVariableText(
+      enText: 'Request',
+      arText: 'طلب',
+    );
+    final all = FFLocalizations.of(context).getText('2p0kruhq');
+    if (label == active) return 'active';
+    if (label == inactive) return 'inactive';
+    if (label == draft) return 'draft';
+    if (label == archived) return 'archived';
+    if (label == request) return 'request';
+    if (label == all) return 'all';
+    return 'all';
+  }
+
+  List<String> get _productStatusOptions {
+    final options = <String>[
+      FFLocalizations.of(context).getText('2p0kruhq' /* All */),
+      FFLocalizations.of(context).getText('1o6znrc0' /* Active */),
+      FFLocalizations.of(context).getText('b974f0q0' /* Inactive */),
+      FFLocalizations.of(context).getText('b7gsdgle' /* Draft */),
+      FFLocalizations.of(context).getText('3dm26jhd' /* Archived */),
+    ];
+    if (FFAppState().currentUserRoleKey != 'designer') {
+      options.add(FFLocalizations.of(context).getVariableText(
+        enText: 'Request',
+        arText: 'طلب',
+      ));
+    }
+    return options;
+  }
+
+  Widget _buildProductsStatusDropdown() {
+    return AzyaaToolbarBox(
+      width: 190.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.statusFilterController ??=
+            FormFieldController<String>(_productsStatusLabel(_model.productFilters)),
+        options: _productStatusOptions,
+        onChanged: (val) {
+          safeSetState(() {
+            _model.productFilters = _productsFilterFromLabel(val);
+            _model.choiceChipsValue = val;
+            _resetProductsWindow();
+          });
+        },
+        width: 190.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Status',
+        icon: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: FlutterFlowTheme.of(context).secondaryText,
+          size: 22.0,
+        ),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildProductsSortDropdown() {
+    return AzyaaToolbarBox(
+      width: 120.0,
+      height: 40.0,
+      child: FlutterFlowDropDown<String>(
+        controller: _model.dateFilterController ??=
+            FormFieldController<String>(
+          _model.dateFilter == 'All' ? null : _model.dateFilter,
+        ),
+        options: const [
+          'Today',
+          'Yesterday',
+          'This Week',
+          'This Month',
+          'Custom',
+        ],
+        onChanged: (val) async {
+          if (val == null) {
+            return;
+          }
+          if (val == 'Custom') {
+            await _pickProductDateRange();
+          } else {
+            safeSetState(() {
+              _model.dateFilter = val;
+              _resetProductsWindow();
+            });
+          }
+        },
+        width: 120.0,
+        height: 40.0,
+        textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        hintText: 'Sort',
+        icon: Icon(
+          Icons.calendar_today_rounded,
+          color: FlutterFlowTheme.of(context).secondaryText,
+          size: 18.0,
+        ),
+        elevation: 2.0,
+        borderColor: Colors.transparent,
+        borderWidth: 0.0,
+        borderRadius: 8.0,
+        margin: const EdgeInsetsDirectional.fromSTEB(8.0, 0.0, 8.0, 0.0),
+        hidesUnderline: true,
+        isOverButton: false,
+        isSearchable: false,
+        isMultiSelect: false,
+      ),
+    );
+  }
+
+  Widget _buildProductsDesignerDropdown() {
+    return AzyaaToolbarBox(
+      width: 200.0,
+      height: 40.0,
+      child: FutureBuilder<List<UsersRecord>>(
+        future: _designersFuture,
+        builder: (context, snapshot) {
+          final designers = snapshot.data ?? <UsersRecord>[];
+          final sorted = designers.where((u) => u.uid.isNotEmpty).toList()
+            ..sort((a, b) => (a.designerMainInfo.designerInfo.name.isNotEmpty
+                    ? a.designerMainInfo.designerInfo.name
+                    : a.displayName)
+                .toLowerCase()
+                .compareTo((b.designerMainInfo.designerInfo.name.isNotEmpty
+                        ? b.designerMainInfo.designerInfo.name
+                        : b.displayName)
+                    .toLowerCase()));
+          final options = ['', ...sorted.map((u) => u.uid)];
+          final optionLabels = [
+            'All Designers',
+            ...sorted.map((u) => u.designerMainInfo.designerInfo.name.isNotEmpty
+                ? u.designerMainInfo.designerInfo.name
+                : (u.displayName.isNotEmpty ? u.displayName : u.uid)),
+          ];
+          return FlutterFlowDropDown<String>(
+            controller: _model.designerFilterController ??=
+                FormFieldController<String>(_model.designerFilterId ?? ''),
+            options: options,
+            optionLabels: optionLabels,
+            onChanged: (val) {
+              safeSetState(() {
+                _model.designerFilterId =
+                    (val == null || val.isEmpty) ? null : val;
+                _resetProductsWindow();
+              });
+            },
+            width: 200.0,
+            height: 40.0,
+            textStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                  font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                  fontSize: 12.0,
+                  letterSpacing: 0.0,
+                  fontWeight: FontWeight.w500,
+                ),
+            hintText: 'All Designers',
+            icon: Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: FlutterFlowTheme.of(context).secondaryText,
+              size: 22.0,
+            ),
+            elevation: 2.0,
+            borderColor: Colors.transparent,
+            borderWidth: 0.0,
+            borderRadius: 8.0,
+            margin: const EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 8.0, 0.0),
+            hidesUnderline: true,
+            isOverButton: false,
+            isSearchable: true,
+            isMultiSelect: false,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _pickProductDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange:
+          (_model.customRangeStart != null && _model.customRangeEnd != null)
+              ? DateTimeRange(
+                  start: _model.customRangeStart!,
+                  end: _model.customRangeEnd!,
+                )
+              : null,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+                primary: FlutterFlowTheme.of(context).primary,
+              ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      safeSetState(() {
+        _model.customRangeStart = picked.start;
+        _model.customRangeEnd = picked.end;
+        _model.dateFilter = 'Custom';
+        _model.dateFilterController?.value = 'Custom';
+      });
+    } else if (_model.customRangeStart == null) {
+      safeSetState(() {
+        _model.dateFilter = 'All';
+        _model.dateFilterController?.value = 'All';
+      });
+    }
+  }
+
+  bool get _hasActiveProductFilters =>
+      (_model.productFilters != 'all' && _model.productFilters != 'All') ||
+      (_model.designerFilterId != null &&
+          _model.designerFilterId!.isNotEmpty) ||
+      _model.dateFilter != 'All' ||
+      _model.sortField.isNotEmpty ||
+      _model.searchStatus == 'Show' ||
+      (_model.searchTextController?.text.isNotEmpty ?? false);
+
+  void _resetAllProductFilters() {
+    safeSetState(() {
+      _model.productFilters = 'all';
+      _model.choiceChipsValue = FFLocalizations.of(context).getText(
+        '2p0kruhq' /* All */,
+      );
+      _model.designerFilterId = null;
+      _model.designerFilterController?.value = '';
+      _model.dateFilter = 'All';
+      _model.dateFilterController?.value = null;
+      _model.customRangeStart = null;
+      _model.customRangeEnd = null;
+      _model.sortField = '';
+      _model.sortAscending = true;
+      _model.searchStatus = 'Hide';
+      _model.searchTextController?.clear();
+      _model.algoliaSearchResults = null;
+      _resetProductsWindow();
+    });
+  }
+
+  Widget _buildProductsSearchField() {
+    return TextFormField(
+        controller: _model.searchTextController,
+        focusNode: _model.searchFocusNode,
+        onChanged: (_) => EasyDebounce.debounce(
+          '_model.searchTextController',
+          Duration(milliseconds: 2000),
+          () async {
+            if (_model.searchTextController.text != '') {
+              safeSetState(() => _model.algoliaSearchResults = null);
+              await ProductsRecord.search(
+                term: _model.searchTextController.text,
+                maxResults: 10,
+              )
+                  .then((r) => _model.algoliaSearchResults = r)
+                  .onError((_, __) => _model.algoliaSearchResults = [])
+                  .whenComplete(() => safeSetState(() {}));
+
+              _model.searchStatus = 'Show';
+              _resetProductsWindow();
+              safeSetState(() {});
+            } else {
+              _model.searchStatus = 'Hide';
+              _resetProductsWindow();
+              safeSetState(() {});
+            }
+          },
+        ),
+        autofocus: false,
+        obscureText: false,
+        decoration: InputDecoration(
+          isDense: true,
+          hintText: FFLocalizations.of(context).getText(
+            '09k6sb6f' /* Search... */,
+          ),
+          hintStyle: FlutterFlowTheme.of(context).bodyMedium.override(
+                font: GoogleFonts.inter(),
+                color: FlutterFlowTheme.of(context).secondaryText,
+                fontSize: 12.0,
+                letterSpacing: 0.0,
+              ),
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: FlutterFlowTheme.of(context).border,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: FlutterFlowTheme.of(context).primaryText,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: FlutterFlowTheme.of(context).error,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: FlutterFlowTheme.of(context).error,
+              width: 1.0,
+            ),
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+          filled: true,
+          fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+          hoverColor: FlutterFlowTheme.of(context).secondaryBackground,
+          suffixIcon: Icon(
+            FFIcons.ksearch,
+            color: FlutterFlowTheme.of(context).secondaryText,
+            size: 18.0,
+          ),
+        ),
+        style: FlutterFlowTheme.of(context).bodyMedium.override(
+              font: GoogleFonts.inter(),
+              fontSize: 12.0,
+              letterSpacing: 0.0,
+            ),
+        cursorColor: FFAppState().theme.themeMain.primary,
+        validator:
+            _model.searchTextControllerValidator.asValidator(context),
+    );
+  }
+
+  List<ProductsRecord> _filteredProductsForExport(
+    List<ProductsRecord> source,
+  ) {
+    return source
+        .where((e) => productMatchesStatusFilter(e, _model.productFilters))
+        .where((e) =>
+            _model.designerFilterId == null ||
+            _model.designerFilterId!.isEmpty ||
+            e.productAuthorizer.productDesignerId == _model.designerFilterId)
+        .where((e) => productMatchesDateFilter(
+              e.createdAt,
+              _model.dateFilter,
+              _model.customRangeStart,
+              _model.customRangeEnd,
+            ))
+        .toList();
+  }
+
+  List<List<String>> _productExportRows(
+    List<ProductsRecord> products,
+    List<InventoryRecord> inventory,
+    Map<String, String> designerNames,
+  ) {
+    final rows = <List<String>>[
+      ['ID', 'Name', 'Price (KD)', 'Stock', 'Total Sales', 'Designer', 'Status'],
+    ];
+    for (final p in products) {
+      rows.add([
+        p.productId,
+        p.productInfo.name,
+        p.product.productPrice.toString(),
+        productStock(p, inventory).toString(),
+        p.productMarketing.productSalesHistory.length.toString(),
+        designerNames[p.productAuthorizer.productDesignerId] ??
+            p.productAuthorizer.productDesignerId,
+        p.status,
+      ]);
+    }
+    return rows;
+  }
+
+  void _downloadBytes(Uint8List bytes, String fileName, String mimeType) {
+    final blob = web.Blob(
+      [bytes.toJS].toJS,
+      web.BlobPropertyBag(type: mimeType),
+    );
+    final url = web.URL.createObjectURL(blob);
+    final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    web.URL.revokeObjectURL(url);
+  }
+
+  Future<Map<String, String>> _loadDesignerNames() async {
+    final designers = await _designersFuture;
+    return <String, String>{
+      for (final u in designers)
+        if (u.uid.isNotEmpty)
+          u.uid: (u.designerMainInfo.designerInfo.name.isNotEmpty
+              ? u.designerMainInfo.designerInfo.name
+              : (u.displayName.isNotEmpty ? u.displayName : u.uid)),
+    };
+  }
+
+  Future<void> _exportProductsCsv(
+    List<ProductsRecord> products,
+    List<InventoryRecord> inventory,
+  ) async {
+    final names = await _loadDesignerNames();
+    final rows = _productExportRows(products, inventory, names);
+    final buffer = StringBuffer('\uFEFF');
+    for (final row in rows) {
+      buffer.writeln(
+        row.map((cell) => '"${cell.replaceAll('"', '""')}"').join(','),
+      );
+    }
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(utf8.encode(buffer.toString())),
+      'products_$timestamp.csv',
+      'text/csv;charset=utf-8',
+    );
+  }
+
+  Future<void> _exportProductsExcel(
+    List<ProductsRecord> products,
+    List<InventoryRecord> inventory,
+  ) async {
+    final names = await _loadDesignerNames();
+    final rows = _productExportRows(products, inventory, names);
+    final workbook = Workbook();
+    final sheet = workbook.worksheets[0];
+    for (var r = 0; r < rows.length; r++) {
+      for (var c = 0; c < rows[r].length; c++) {
+        final range = sheet.getRangeByIndex(r + 1, c + 1);
+        if (r > 0 && (c == 2 || c == 3 || c == 4)) {
+          range.setNumber(double.tryParse(rows[r][c]) ?? 0);
+        } else {
+          range.setText(rows[r][c]);
+        }
+      }
+    }
+    for (var c = 1; c <= rows.first.length; c++) {
+      sheet.autoFitColumn(c);
+    }
+    final bytes = workbook.saveAsStream();
+    workbook.dispose();
+    final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+    _downloadBytes(
+      Uint8List.fromList(bytes),
+      'products_$timestamp.xlsx',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+  }
+
+  Future<void> _runExport(
+    List<ProductsRecord> products,
+    List<InventoryRecord> inventory,
+    Future<void> Function(List<ProductsRecord>, List<InventoryRecord>) exporter,
+  ) async {
+    if (products.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No records to export')),
+      );
+      return;
+    }
+    safeSetState(() => _isExporting = true);
+    try {
+      await exporter(products, inventory);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Exported ${products.length} products'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        safeSetState(() => _isExporting = false);
+      }
+    }
+  }
+
+  void _showProductsExportOptions(
+    List<ProductsRecord> products,
+    List<InventoryRecord> inventory,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(
+            'Export Products',
+            style: FlutterFlowTheme.of(context).headlineSmall,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: Text(
+                  '${products.length} products (current filters, image excluded)',
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        font: GoogleFonts.inter(),
+                        color: FlutterFlowTheme.of(context).secondaryText,
+                        letterSpacing: 0.0,
+                      ),
+                ),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.table_chart, color: Color(0xFF1D6F42)),
+                title: const Text('Export to Excel'),
+                subtitle: const Text('.xlsx format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(products, inventory, _exportProductsExcel);
+                },
+              ),
+              const Divider(),
+              ListTile(
+                leading:
+                    const Icon(Icons.description, color: Color(0xFF1976D2)),
+                title: const Text('Export to CSV'),
+                subtitle: const Text('.csv format'),
+                onTap: () {
+                  Navigator.pop(dialogContext);
+                  _runExport(products, inventory, _exportProductsCsv);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -113,7 +841,12 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                 child: Padding(
                                   padding: EdgeInsets.all(8.0),
                                   child: StreamBuilder<List<ProductsRecord>>(
-                                    stream: queryProductsRecord(),
+                                    stream: queryProductsRecord(
+                                      queryBuilder: (productsRecord) =>
+                                          productsRecord.orderBy('created_at',
+                                              descending: true),
+                                      limit: 500,
+                                    ),
                                     builder: (context, snapshot) {
                                       // Customize what your widget looks like when it's loading.
                                       if (!snapshot.hasData) {
@@ -1165,6 +1898,7 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                       'status',
                                                       isEqualTo: 'active',
                                                     ),
+                                                    limit: 500,
                                                   ),
                                                   builder: (context, snapshot) {
                                                     // Customize what your widget looks like when it's loading.
@@ -1211,488 +1945,58 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                             CrossAxisAlignment
                                                                 .start,
                                                         children: [
-                                                          Padding(
-                                                            padding:
-                                                                EdgeInsets.all(
-                                                                    12.0),
-                                                            child: Row(
-                                                              mainAxisSize:
-                                                                  MainAxisSize
-                                                                      .max,
+                                                          AzyaaListToolbar(
+                                                            leftControl: Row(
                                                               children: [
-                                                                Expanded(
-                                                                  child:
-                                                                      FlutterFlowChoiceChips(
-                                                                    options: [
-                                                                      ChipData(FFLocalizations.of(
-                                                                              context)
-                                                                          .getText(
-                                                                        '2p0kruhq' /* All */,
-                                                                      )),
-                                                                      ChipData(FFLocalizations.of(
-                                                                              context)
-                                                                          .getText(
-                                                                        '1o6znrc0' /* Active */,
-                                                                      )),
-                                                                      ChipData(FFLocalizations.of(
-                                                                              context)
-                                                                          .getText(
-                                                                        'b974f0q8' /* Inactive */,
-                                                                      )),
-                                                                      ChipData(FFLocalizations.of(
-                                                                              context)
-                                                                          .getText(
-                                                                        'b7gsdgle' /* Draft */,
-                                                                      )),
-                                                                      ChipData(FFLocalizations.of(
-                                                                              context)
-                                                                          .getText(
-                                                                        '3dm26jhd' /* Archived */,
-                                                                      )),
-                                                                      ChipData(FFAppState().currentUserRoleKey ==
-                                                                              'designer'
-                                                                          ? ''
-                                                                          : FFLocalizations.of(context)
-                                                                              .getVariableText(
-                                                                              enText: 'Request',
-                                                                              arText: 'طلب',
-                                                                            ))
-                                                                    ],
-                                                                    onChanged:
-                                                                        (val) async {
-                                                                      safeSetState(() =>
-                                                                          _model.choiceChipsValue =
-                                                                              val?.firstOrNull);
-                                                                      _model.productFilters =
-                                                                          () {
-                                                                        if ((_model.choiceChipsValue ==
-                                                                                'Active') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'نشيط')) {
-                                                                          return 'active';
-                                                                        } else if ((_model.choiceChipsValue ==
-                                                                                'Inactive') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'غير نشط')) {
-                                                                          return 'inactive';
-                                                                        } else if ((_model.choiceChipsValue ==
-                                                                                'Draft') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'مسودة')) {
-                                                                          return 'draft';
-                                                                        } else if ((_model.choiceChipsValue ==
-                                                                                'Archived') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'مؤرشف')) {
-                                                                          return 'archived';
-                                                                        } else if ((_model.choiceChipsValue ==
-                                                                                'Request') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'طلب')) {
-                                                                          return 'request';
-                                                                        } else if ((_model.choiceChipsValue ==
-                                                                                'All') ||
-                                                                            (_model.choiceChipsValue ==
-                                                                                'الجميع')) {
-                                                                          return 'all';
-                                                                        } else {
-                                                                          return 'all';
-                                                                        }
-                                                                      }();
-                                                                      safeSetState(
-                                                                          () {});
-                                                                    },
-                                                                    selectedChipStyle:
-                                                                        ChipStyle(
-                                                                      backgroundColor:
-                                                                          FlutterFlowTheme.of(context)
-                                                                              .alternate,
-                                                                      textStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.inter(
-                                                                              fontWeight: FontWeight.w500,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).primary,
-                                                                            fontSize:
-                                                                                12.0,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                            fontWeight:
-                                                                                FontWeight.w500,
-                                                                            fontStyle:
-                                                                                FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                          ),
-                                                                      iconColor:
-                                                                          FlutterFlowTheme.of(context)
-                                                                              .primary,
-                                                                      iconSize:
-                                                                          0.0,
-                                                                      labelPadding:
-                                                                          EdgeInsets.all(
-                                                                              4.0),
-                                                                      elevation:
-                                                                          0.0,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                    ),
-                                                                    unselectedChipStyle:
-                                                                        ChipStyle(
-                                                                      backgroundColor:
-                                                                          FlutterFlowTheme.of(context)
-                                                                              .secondaryBackground,
-                                                                      textStyle: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.inter(
-                                                                              fontWeight: FontWeight.w500,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).secondaryText,
-                                                                            fontSize:
-                                                                                12.0,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                            fontWeight:
-                                                                                FontWeight.w500,
-                                                                            fontStyle:
-                                                                                FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                          ),
-                                                                      iconColor:
-                                                                          FlutterFlowTheme.of(context)
-                                                                              .primaryText,
-                                                                      iconSize:
-                                                                          0.0,
-                                                                      labelPadding:
-                                                                          EdgeInsets.all(
-                                                                              4.0),
-                                                                      elevation:
-                                                                          0.0,
-                                                                      borderRadius:
-                                                                          BorderRadius.circular(
-                                                                              8.0),
-                                                                    ),
-                                                                    chipSpacing:
-                                                                        8.0,
-                                                                    rowSpacing:
-                                                                        8.0,
-                                                                    multiselect:
-                                                                        false,
-                                                                    initialized:
-                                                                        _model.choiceChipsValue !=
-                                                                            null,
-                                                                    alignment:
-                                                                        WrapAlignment
-                                                                            .start,
-                                                                    controller: _model
-                                                                            .choiceChipsValueController ??=
-                                                                        FormFieldController<
-                                                                            List<String>>(
-                                                                      [
-                                                                        _model
-                                                                            .productFilters
-                                                                      ],
-                                                                    ),
-                                                                    wrapped:
-                                                                        true,
-                                                                  ),
-                                                                ),
-                                                                if (responsiveVisibility(
-                                                                  context:
-                                                                      context,
-                                                                  phone: false,
-                                                                  tablet: false,
-                                                                  tabletLandscape:
-                                                                      false,
-                                                                  desktop:
-                                                                      false,
-                                                                ))
-                                                                  Container(
-                                                                    width:
-                                                                        180.0,
-                                                                    decoration:
-                                                                        BoxDecoration(),
-                                                                    child:
-                                                                        Material(
-                                                                      color: Colors
-                                                                          .transparent,
-                                                                      child: SwitchListTile
-                                                                          .adaptive(
-                                                                        value: _model.switchListTileValue ??=
-                                                                            true,
-                                                                        onChanged:
-                                                                            (newValue) async {
-                                                                          safeSetState(() =>
-                                                                              _model.switchListTileValue = newValue);
-                                                                        },
-                                                                        title:
-                                                                            Text(
-                                                                          FFLocalizations.of(context)
-                                                                              .getText(
-                                                                            'niuw05ig' /* Auto-Approval */,
-                                                                          ),
-                                                                          style: FlutterFlowTheme.of(context)
-                                                                              .bodySmall
-                                                                              .override(
-                                                                                font: GoogleFonts.inter(
-                                                                                  fontWeight: FontWeight.w500,
-                                                                                  fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                                ),
-                                                                                letterSpacing: 0.0,
-                                                                                fontWeight: FontWeight.w500,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
-                                                                              ),
-                                                                        ),
-                                                                        tileColor:
-                                                                            FlutterFlowTheme.of(context).secondaryBackground,
-                                                                        activeColor:
-                                                                            FlutterFlowTheme.of(context).alternate,
-                                                                        activeTrackColor:
-                                                                            FlutterFlowTheme.of(context).primary,
-                                                                        dense:
-                                                                            true,
-                                                                        controlAffinity:
-                                                                            ListTileControlAffinity.trailing,
-                                                                        contentPadding: EdgeInsetsDirectional.fromSTEB(
-                                                                            0.0,
-                                                                            0.0,
-                                                                            0.0,
-                                                                            0.0),
-                                                                      ),
-                                                                    ),
-                                                                  ),
-                                                                Align(
-                                                                  alignment:
-                                                                      AlignmentDirectional(
-                                                                          0.0,
-                                                                          0.0),
-                                                                  child:
-                                                                      Container(
-                                                                    width:
-                                                                        200.0,
-                                                                    child:
-                                                                        TextFormField(
-                                                                      controller:
-                                                                          _model
-                                                                              .searchTextController,
-                                                                      focusNode:
-                                                                          _model
-                                                                              .searchFocusNode,
-                                                                      onChanged:
-                                                                          (_) =>
-                                                                              EasyDebounce.debounce(
-                                                                        '_model.searchTextController',
-                                                                        Duration(
-                                                                            milliseconds:
-                                                                                2000),
-                                                                        () async {
-                                                                          if (_model.searchTextController.text != '') {
-                                                                            safeSetState(() =>
-                                                                                _model.algoliaSearchResults = null);
-                                                                            await ProductsRecord
-                                                                                .search(
-                                                                              term: _model.searchTextController.text,
-                                                                              maxResults: 10,
-                                                                            ).then((r) => _model.algoliaSearchResults = r).onError((_, __) => _model.algoliaSearchResults = []).whenComplete(() =>
-                                                                                safeSetState(() {}));
-
-                                                                            _model.searchStatus =
-                                                                                'Show';
-                                                                            safeSetState(() {});
-                                                                          } else {
-                                                                            _model.searchStatus =
-                                                                                'Hide';
-                                                                            safeSetState(() {});
-                                                                          }
-                                                                        },
-                                                                      ),
-                                                                      autofocus:
-                                                                          false,
-                                                                      obscureText:
-                                                                          false,
-                                                                      decoration:
-                                                                          InputDecoration(
-                                                                        isDense:
-                                                                            true,
-                                                                        labelStyle: FlutterFlowTheme.of(context)
-                                                                            .labelMedium
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(
-                                                                                fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                                fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                              ),
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
-                                                                              fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
-                                                                            ),
-                                                                        hintText:
-                                                                            FFLocalizations.of(context).getText(
-                                                                          '09k6sb6f' /* Search... */,
-                                                                        ),
-                                                                        hintStyle: FlutterFlowTheme.of(context)
-                                                                            .bodyMedium
-                                                                            .override(
-                                                                              font: GoogleFonts.inter(
-                                                                                fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                              ),
-                                                                              color: FlutterFlowTheme.of(context).secondaryText,
-                                                                              fontSize: 12.0,
-                                                                              letterSpacing: 0.0,
-                                                                              fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                        enabledBorder:
-                                                                            OutlineInputBorder(
-                                                                          borderSide:
-                                                                              BorderSide(
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).border,
-                                                                            width:
-                                                                                1.0,
-                                                                          ),
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(8.0),
-                                                                        ),
-                                                                        focusedBorder:
-                                                                            OutlineInputBorder(
-                                                                          borderSide:
-                                                                              BorderSide(
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).primaryText,
-                                                                            width:
-                                                                                1.0,
-                                                                          ),
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(8.0),
-                                                                        ),
-                                                                        errorBorder:
-                                                                            OutlineInputBorder(
-                                                                          borderSide:
-                                                                              BorderSide(
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).error,
-                                                                            width:
-                                                                                1.0,
-                                                                          ),
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(8.0),
-                                                                        ),
-                                                                        focusedErrorBorder:
-                                                                            OutlineInputBorder(
-                                                                          borderSide:
-                                                                              BorderSide(
-                                                                            color:
-                                                                                FlutterFlowTheme.of(context).error,
-                                                                            width:
-                                                                                1.0,
-                                                                          ),
-                                                                          borderRadius:
-                                                                              BorderRadius.circular(8.0),
-                                                                        ),
-                                                                        filled:
-                                                                            true,
-                                                                        fillColor:
-                                                                            FlutterFlowTheme.of(context).secondaryBackground,
-                                                                        hoverColor:
-                                                                            FlutterFlowTheme.of(context).secondaryBackground,
-                                                                        suffixIcon:
-                                                                            Icon(
-                                                                          FFIcons
-                                                                              .ksearch,
-                                                                          color:
-                                                                              FlutterFlowTheme.of(context).secondaryText,
-                                                                          size:
-                                                                              18.0,
-                                                                        ),
-                                                                      ),
-                                                                      style: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .bodyMedium
-                                                                          .override(
-                                                                            font:
-                                                                                GoogleFonts.inter(
-                                                                              fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                            ),
-                                                                            fontSize:
-                                                                                12.0,
-                                                                            letterSpacing:
-                                                                                0.0,
-                                                                            fontWeight:
-                                                                                FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                            fontStyle:
-                                                                                FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                          ),
-                                                                      cursorColor: FFAppState()
-                                                                          .theme
-                                                                          .themeMain
-                                                                          .primary,
-                                                                      validator: _model
-                                                                          .searchTextControllerValidator
-                                                                          .asValidator(
-                                                                              context),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                if (responsiveVisibility(
-                                                                  context:
-                                                                      context,
-                                                                  phone: false,
-                                                                  tablet: false,
-                                                                  tabletLandscape:
-                                                                      false,
-                                                                  desktop:
-                                                                      false,
-                                                                ))
-                                                                  FlutterFlowIconButton(
-                                                                    borderColor:
-                                                                        FlutterFlowTheme.of(context)
-                                                                            .buttonBorder,
-                                                                    borderRadius:
-                                                                        8.0,
-                                                                    buttonSize:
-                                                                        40.0,
-                                                                    fillColor: FlutterFlowTheme.of(
-                                                                            context)
-                                                                        .secondaryBackground,
-                                                                    icon: Icon(
-                                                                      Icons
-                                                                          .format_list_bulleted,
-                                                                      color: FlutterFlowTheme.of(
-                                                                              context)
-                                                                          .primaryText,
-                                                                      size:
-                                                                          24.0,
-                                                                    ),
-                                                                    onPressed:
-                                                                        () async {
-                                                                      if (_model
-                                                                              .styleName ==
-                                                                          'List') {
-                                                                        _model.styleName =
-                                                                            'Grid';
-                                                                        safeSetState(
-                                                                            () {});
-                                                                      } else {
-                                                                        _model.styleName =
-                                                                            'List';
-                                                                        safeSetState(
-                                                                            () {});
-                                                                      }
-                                                                    },
-                                                                  ),
-                                                              ].divide(SizedBox(
-                                                                  width: 16.0)),
+                                                                _buildProductsStatusDropdown(),
+                                                                const SizedBox(
+                                                                    width: 12.0),
+                                                                _buildProductsDesignerDropdown(),
+                                                              ],
                                                             ),
+                                                            searchField:
+                                                                _buildProductsSearchField(),
+                                                            showingText:
+                                                                'Showing ${_model.visibleCount.clamp(0, customerProductsRecordList.length)} of ${customerProductsRecordList.length}',
+                                                            trailingActions: [
+                                                              AzyaaToolbarButtons.export(
+                                                                context: context,
+                                                                onPressed: _isExporting
+                                                                    ? null
+                                                                    : () => _showProductsExportOptions(
+                                                                          _filteredProductsForExport(
+                                                                              customerProductsRecordList),
+                                                                          listInventoryRecordList,
+                                                                        ),
+                                                                isExporting:
+                                                                    _isExporting,
+                                                              ),
+                                                              _buildProductsSortDropdown(),
+                                                            ],
+                                                            extraTrailing: [
+                                                              if (_hasActiveProductFilters)
+                                                                AzyaaToolbarButtons.reset(
+                                                                  context: context,
+                                                                  onPressed:
+                                                                      _resetAllProductFilters,
+                                                                ),
+                                                              FlutterFlowIconButton(
+                                                                borderColor:
+                                                                    FlutterFlowTheme.of(context).buttonBorder,
+                                                                borderRadius: 8.0,
+                                                                buttonSize: 40.0,
+                                                                fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                icon: Icon(
+                                                                  Icons.format_list_bulleted,
+                                                                  color: FlutterFlowTheme.of(context).primaryText,
+                                                                  size: 24.0,
+                                                                ),
+                                                                onPressed: () async {
+                                                                  _model.styleName = _model.styleName == 'List' ? 'Grid' : 'List';
+                                                                  safeSetState(() {});
+                                                                },
+                                                              ),
+                                                            ],
                                                           ),
                                                           Container(
                                                             width: MediaQuery
@@ -1772,7 +2076,47 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                                     .sortedList(keyOf: (e) => e.createdAt!, desc: true))
                                                                             ?.toList() ??
                                                                         [];
-                                                                    if (prd
+                                                                    final prdView =
+                                                                        prd
+                                                                            .where((e) =>
+                                                                                _model.designerFilterId == null ||
+                                                                                _model.designerFilterId!.isEmpty ||
+                                                                                e.productAuthorizer.productDesignerId == _model.designerFilterId)
+                                                                            .where((e) => productMatchesDateFilter(
+                                                                                  e.createdAt,
+                                                                                  _model.dateFilter,
+                                                                                  _model.customRangeStart,
+                                                                                  _model.customRangeEnd,
+                                                                                ))
+                                                                            .toList();
+                                                                    if (_model
+                                                                        .sortField
+                                                                        .isNotEmpty) {
+                                                                      int cmp(
+                                                                          ProductsRecord
+                                                                              a,
+                                                                          ProductsRecord
+                                                                              b) {
+                                                                        switch (
+                                                                            _model.sortField) {
+                                                                          case 'price':
+                                                                            return a.product.productPrice.toDouble().compareTo(b.product.productPrice.toDouble());
+                                                                          case 'stock':
+                                                                            return productStock(a, listInventoryRecordList).compareTo(productStock(b, listInventoryRecordList));
+                                                                          case 'sales':
+                                                                            return a.productMarketing.productSalesHistory.length.compareTo(b.productMarketing.productSalesHistory.length);
+                                                                          default:
+                                                                            return 0;
+                                                                        }
+                                                                      }
+
+                                                                      prdView.sort((a,
+                                                                              b) =>
+                                                                          _model.sortAscending
+                                                                              ? cmp(a, b)
+                                                                              : -cmp(a, b));
+                                                                    }
+                                                                    if (prdView
                                                                         .isEmpty) {
                                                                       return Container(
                                                                         width:
@@ -1788,13 +2132,64 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                         ),
                                                                       );
                                                                     }
+                                                                    final windowedPrdView =
+                                                                        prdView
+                                                                            .take(_model
+                                                                                .visibleCount)
+                                                                            .toList();
+                                                                    final hasMoreProducts =
+                                                                        prdView.length >
+                                                                            windowedPrdView
+                                                                                .length;
 
-                                                                    return FlutterFlowDataTable<
-                                                                        ProductsRecord>(
+                                                                    return NotificationListener<
+                                                                        ScrollNotification>(
+                                                                      onNotification:
+                                                                          (notification) {
+                                                                        if (hasMoreProducts &&
+                                                                            !_isLoadingMore &&
+                                                                            _model.visibleCount <
+                                                                                prdView.length &&
+                                                                            notification.metrics.pixels >=
+                                                                                notification.metrics.maxScrollExtent -
+                                                                                    300) {
+                                                                          safeSetState(() =>
+                                                                              _isLoadingMore =
+                                                                                  true);
+                                                                          WidgetsBinding
+                                                                              .instance
+                                                                              .addPostFrameCallback((_) {
+                                                                            if (mounted) {
+                                                                              safeSetState(() {
+                                                                                _model.visibleCount = (_model.visibleCount + ProductsModel.loadMoreStep).clamp(0, prdView.length);
+                                                                                _isLoadingMore =
+                                                                                    false;
+                                                                              });
+                                                                            }
+                                                                          });
+                                                                        }
+                                                                        return false;
+                                                                      },
+                                                                      child:
+                                                                          FutureBuilder<
+                                                                        Map<String,
+                                                                            UsersRecord>>(
+                                                                      future:
+                                                                          _productDesignersLookupFuture(
+                                                                              windowedPrdView),
+                                                                      builder:
+                                                                          (context,
+                                                                              designerSnapshot) {
+                                                                        final designerByUid =
+                                                                            designerSnapshot.data ??
+                                                                                {};
+                                                                        return FlutterFlowDataTable<
+                                                                            ProductsRecord>(
                                                                       controller:
                                                                           _model
                                                                               .paginatedDataTableController,
-                                                                      data: prd,
+                                                                      data:
+                                                                          windowedPrdView,
                                                                       columnsBuilder:
                                                                           (onSortChanged) =>
                                                                               [
@@ -1873,7 +2268,8 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                         ),
                                                                         DataColumn2(
                                                                           label:
-                                                                              DefaultTextStyle.merge(
+                                                                              sortableColumnHeader(
+                                                                                  DefaultTextStyle.merge(
                                                                             softWrap:
                                                                                 true,
                                                                             child:
@@ -1893,11 +2289,17 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                                     fontStyle: FlutterFlowTheme.of(context).labelLarge.fontStyle,
                                                                                   ),
                                                                             ),
-                                                                          ),
+                                                                          )),
+                                                                          onSort: (i,
+                                                                                  asc) =>
+                                                                              onSortChanged(
+                                                                                  i,
+                                                                                  asc),
                                                                         ),
                                                                         DataColumn2(
                                                                           label:
-                                                                              DefaultTextStyle.merge(
+                                                                              sortableColumnHeader(
+                                                                                  DefaultTextStyle.merge(
                                                                             softWrap:
                                                                                 true,
                                                                             child:
@@ -1917,11 +2319,17 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                                     fontStyle: FlutterFlowTheme.of(context).labelLarge.fontStyle,
                                                                                   ),
                                                                             ),
-                                                                          ),
+                                                                          )),
+                                                                          onSort: (i,
+                                                                                  asc) =>
+                                                                              onSortChanged(
+                                                                                  i,
+                                                                                  asc),
                                                                         ),
                                                                         DataColumn2(
                                                                           label:
-                                                                              DefaultTextStyle.merge(
+                                                                              sortableColumnHeader(
+                                                                                  DefaultTextStyle.merge(
                                                                             softWrap:
                                                                                 true,
                                                                             child:
@@ -1941,7 +2349,12 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                                     fontStyle: FlutterFlowTheme.of(context).labelLarge.fontStyle,
                                                                                   ),
                                                                             ),
-                                                                          ),
+                                                                          )),
+                                                                          onSort: (i,
+                                                                                  asc) =>
+                                                                              onSortChanged(
+                                                                                  i,
+                                                                                  asc),
                                                                         ),
                                                                         DataColumn2(
                                                                           label:
@@ -2197,32 +2610,24 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                               )),
                                                                             ),
                                                                           ),
-                                                                          StreamBuilder<
-                                                                              List<UsersRecord>>(
-                                                                            stream:
-                                                                                queryUsersRecord(
-                                                                              queryBuilder: (usersRecord) => usersRecord.where(
-                                                                                'uid',
-                                                                                isEqualTo: prdItem.productAuthorizer.productDesignerId,
-                                                                              ),
-                                                                              singleRecord: true,
-                                                                            ),
+                                                                          Builder(
                                                                             builder:
-                                                                                (context, snapshot) {
-                                                                              // Customize what your widget looks like when it's loading.
-                                                                              if (!snapshot.hasData) {
+                                                                                (context) {
+                                                                              final designerId =
+                                                                                  prdItem.productAuthorizer.productDesignerId;
+                                                                              if (designerId.isEmpty) {
+                                                                                return Container();
+                                                                              }
+                                                                              final textUsersRecord =
+                                                                                  designerByUid[designerId];
+                                                                              if (textUsersRecord ==
+                                                                                  null) {
                                                                                 return Image.asset(
                                                                                   getCORSProxyUrl(
                                                                                     '',
                                                                                   ),
                                                                                 );
                                                                               }
-                                                                              List<UsersRecord> textUsersRecordList = snapshot.data!;
-                                                                              // Return an empty Container when the item does not exist.
-                                                                              if (snapshot.data!.isEmpty) {
-                                                                                return Container();
-                                                                              }
-                                                                              final textUsersRecord = textUsersRecordList.isNotEmpty ? textUsersRecordList.first : null;
 
                                                                               return InkWell(
                                                                                 splashColor: Colors.transparent,
@@ -2241,7 +2646,7 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                                   );
                                                                                 },
                                                                                 child: Text(
-                                                                                  textUsersRecord!.designerMainInfo.designerInfo.name.maybeHandleOverflow(
+                                                                                  textUsersRecord.designerMainInfo.designerInfo.name.maybeHandleOverflow(
                                                                                     maxChars: 7,
                                                                                     replacement: '…',
                                                                                   ),
@@ -2554,6 +2959,31 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                               'Try changing the filters or search terms for this view.',
                                                                         ),
                                                                       ),
+                                                                      onSortChanged:
+                                                                          (columnIndex,
+                                                                              ascending) {
+                                                                        _model.sortAscending =
+                                                                            ascending;
+                                                                        _model.sortField =
+                                                                            () {
+                                                                          switch (
+                                                                              columnIndex) {
+                                                                            case 3:
+                                                                              return 'price';
+                                                                            case 4:
+                                                                              return 'stock';
+                                                                            case 5:
+                                                                              return 'sales';
+                                                                            default:
+                                                                              return '';
+                                                                          }
+                                                                        }();
+                                                                        safeSetState(
+                                                                            () {});
+                                                                      },
+                                                                      sortIconColor:
+                                                                          FlutterFlowTheme.of(context)
+                                                                              .primaryText,
                                                                       paginated:
                                                                           true,
                                                                       selectable:
@@ -2591,6 +3021,9 @@ class _ProductsWidgetState extends State<ProductsWidget> {
                                                                       addVerticalDivider:
                                                                           false,
                                                                     );
+                                                                      },
+                                                                    ),
+                                                                  );
                                                                   },
                                                                 ),
                                                               ),
