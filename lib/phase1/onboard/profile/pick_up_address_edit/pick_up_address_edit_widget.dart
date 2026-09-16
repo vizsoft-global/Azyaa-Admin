@@ -62,10 +62,15 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
             ?.designerMainInfo.designerPickupAddress.state);
     _model.regionFocusNode ??= FocusNode();
 
-    _model.postalCodeTextController ??= TextEditingController(
+    _model.buildingTextController ??= TextEditingController(
         text: currentUserDocument
-            ?.designerMainInfo.designerPickupAddress.postalCode);
-    _model.postalCodeFocusNode ??= FocusNode();
+            ?.designerMainInfo.designerPickupAddress.building);
+    _model.buildingFocusNode ??= FocusNode();
+
+    _model.blockTextController ??= TextEditingController(
+        text:
+            currentUserDocument?.designerMainInfo.designerPickupAddress.block);
+    _model.blockFocusNode ??= FocusNode();
 
     WidgetsBinding.instance.addPostFrameCallback((_) => safeSetState(() {}));
   }
@@ -1353,7 +1358,7 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
                                 decoration: BoxDecoration(),
                                 child: Text(
                                   FFLocalizations.of(context).getText(
-                                    'xmp52o2p' /* Postal Code */,
+                                    'xmp52o2p' /* Building */,
                                   ),
                                   style: FlutterFlowTheme.of(context)
                                       .bodyMedium
@@ -1385,8 +1390,8 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
                               Expanded(
                                 child: AuthUserStreamWidget(
                                   builder: (context) => TextFormField(
-                                    controller: _model.postalCodeTextController,
-                                    focusNode: _model.postalCodeFocusNode,
+                                    controller: _model.buildingTextController,
+                                    focusNode: _model.buildingFocusNode,
                                     autofocus: false,
                                     textInputAction: TextInputAction.next,
                                     obscureText: false,
@@ -1411,7 +1416,7 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
                                           ),
                                       hintText:
                                           FFLocalizations.of(context).getText(
-                                        'xv791nvi' /* Enter your postal code */,
+                                        'xv791nvi' /* Enter building */,
                                       ),
                                       hintStyle: FlutterFlowTheme.of(context)
                                           .labelMedium
@@ -1515,9 +1520,193 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
                                       FlutterFlowTheme.of(context).primaryText,
                                     ),
                                     validator: _model
-                                        .postalCodeTextControllerValidator
+                                        .buildingTextControllerValidator
                                         .asValidator(context),
                                   ),
+                                ),
+                              ),
+                            ].divide(SizedBox(width: 8.0)),
+                          ),
+                        ),
+                        Container(
+                          width: MediaQuery.sizeOf(context).width * 1.0,
+                          height: 1.0,
+                          decoration: BoxDecoration(
+                            color: FlutterFlowTheme.of(context)
+                                .secondaryBackground,
+                            border: Border.all(
+                              color: FlutterFlowTheme.of(context).border,
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.max,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              Container(
+                                width: 150.0,
+                                decoration: BoxDecoration(),
+                                child: Text(
+                                  FFLocalizations.of(context).getText(
+                                    'svaddrblk' /* Block */,
+                                  ),
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .override(
+                                        font: GoogleFonts.inter(
+                                          fontWeight: FontWeight.w600,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontStyle,
+                                        ),
+                                        color: valueOrDefault<Color>(
+                                          FFAppState()
+                                              .theme
+                                              .themeMain
+                                              .primaryText,
+                                          FlutterFlowTheme.of(context)
+                                              .primaryText,
+                                        ),
+                                        fontSize: 13.0,
+                                        letterSpacing: 0.0,
+                                        fontWeight: FontWeight.w600,
+                                        fontStyle: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontStyle,
+                                      ),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _model.blockTextController,
+                                  focusNode: _model.blockFocusNode,
+                                  autofocus: false,
+                                  textInputAction: TextInputAction.next,
+                                  obscureText: false,
+                                  decoration: InputDecoration(
+                                    isDense: true,
+                                    labelStyle: FlutterFlowTheme.of(context)
+                                        .labelMedium
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight: FontWeight.normal,
+                                            fontStyle:
+                                                FlutterFlowTheme.of(context)
+                                                    .labelMedium
+                                                    .fontStyle,
+                                          ),
+                                          letterSpacing: 0.0,
+                                          fontWeight: FontWeight.normal,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .labelMedium
+                                                  .fontStyle,
+                                        ),
+                                    hintText:
+                                        FFLocalizations.of(context).getText(
+                                      'svaddrblkh' /* Enter block */,
+                                    ),
+                                    hintStyle: FlutterFlowTheme.of(context)
+                                        .labelMedium
+                                        .override(
+                                          font: GoogleFonts.inter(
+                                            fontWeight:
+                                                FlutterFlowTheme.of(context)
+                                                    .labelMedium
+                                                    .fontWeight,
+                                            fontStyle:
+                                                FlutterFlowTheme.of(context)
+                                                    .labelMedium
+                                                    .fontStyle,
+                                          ),
+                                          fontSize: 13.0,
+                                          letterSpacing: 0.0,
+                                          fontWeight:
+                                              FlutterFlowTheme.of(context)
+                                                  .labelMedium
+                                                  .fontWeight,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .labelMedium
+                                                  .fontStyle,
+                                        ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
+                                        width: 1.0,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .primary,
+                                        width: 1.0,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    errorBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .error,
+                                        width: 1.0,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    focusedErrorBorder: OutlineInputBorder(
+                                      borderSide: BorderSide(
+                                        color: FlutterFlowTheme.of(context)
+                                            .error,
+                                        width: 1.0,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8.0),
+                                    ),
+                                    filled: true,
+                                    fillColor: FlutterFlowTheme.of(context)
+                                        .secondaryBackground,
+                                    contentPadding: EdgeInsets.all(13.0),
+                                  ),
+                                  style: FlutterFlowTheme.of(context)
+                                      .bodyMedium
+                                      .override(
+                                        font: GoogleFonts.inter(
+                                          fontWeight:
+                                              FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontWeight,
+                                          fontStyle:
+                                              FlutterFlowTheme.of(context)
+                                                  .bodyMedium
+                                                  .fontStyle,
+                                        ),
+                                        color: valueOrDefault<Color>(
+                                          FFAppState()
+                                              .theme
+                                              .themeMain
+                                              .primaryText,
+                                          FlutterFlowTheme.of(context)
+                                              .primaryText,
+                                        ),
+                                        fontSize: 13.0,
+                                        letterSpacing: 0.0,
+                                        fontWeight:
+                                            FlutterFlowTheme.of(context)
+                                                .bodyMedium
+                                                .fontWeight,
+                                        fontStyle: FlutterFlowTheme.of(context)
+                                            .bodyMedium
+                                            .fontStyle,
+                                      ),
+                                  cursorColor: valueOrDefault<Color>(
+                                    FFAppState().theme.themeMain.primary,
+                                    FlutterFlowTheme.of(context).primaryText,
+                                  ),
+                                  validator: _model.blockTextControllerValidator
+                                      .asValidator(context),
                                 ),
                               ),
                             ].divide(SizedBox(width: 8.0)),
@@ -1704,7 +1893,8 @@ class _PickUpAddressEditWidgetState extends State<PickUpAddressEditWidget> {
                             city: _model.cityTextController.text,
                             state: _model.regionTextController.text,
                             country: _model.countryValue,
-                            postalCode: _model.postalCodeTextController.text,
+                            building: _model.buildingTextController.text,
+                            block: _model.blockTextController.text,
                             latLong: _model.googleMapsCenter,
                             shippingEmail: currentUserEmail,
                             clearUnsetFields: false,

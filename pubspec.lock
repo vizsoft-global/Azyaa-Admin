@@ -591,6 +591,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "11.0.0"
+  freezed_annotation:
+    dependency: transitive
+    description:
+      name: freezed_annotation
+      sha256: "7294967ff0a6d98638e7acb774aac3af2550777accd8149c90af5b014e6d44d8"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.0"
   from_css_color:
     dependency: "direct main"
     description:
@@ -1340,6 +1348,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.12.1"
+  store_valley_sdk:
+    dependency: "direct main"
+    description:
+      path: "store_valley_websitek_integration_v1.1.0-rc.5/sdk/store_valley_sdk"
+      relative: true
+    source: path
+    version: "1.1.0-rc.5"
   stream_channel:
     dependency: transitive
     description:

@@ -60,6 +60,46 @@ class LogisticsResponseRecord extends FirestoreRecord {
   String get swftTrackID => _swftTrackID ?? '';
   bool hasSwftTrackID() => _swftTrackID != null;
 
+  String? _requestId;
+  String get requestId => _requestId ?? '';
+  bool hasRequestId() => _requestId != null;
+
+  String? _externalRequestId;
+  String get externalRequestId => _externalRequestId ?? '';
+  bool hasExternalRequestId() => _externalRequestId != null;
+
+  String? _deliveryOrderId;
+  String get deliveryOrderId => _deliveryOrderId ?? '';
+  bool hasDeliveryOrderId() => _deliveryOrderId != null;
+
+  String? _originalSourceLocationId;
+  String get originalSourceLocationId => _originalSourceLocationId ?? '';
+  bool hasOriginalSourceLocationId() => _originalSourceLocationId != null;
+
+  String? _inventorySource;
+  String get inventorySource => _inventorySource ?? '';
+  bool hasInventorySource() => _inventorySource != null;
+
+  String? _returnDestinationType;
+  String get returnDestinationType => _returnDestinationType ?? '';
+  bool hasReturnDestinationType() => _returnDestinationType != null;
+
+  String? _otpVerificationStatus;
+  String get otpVerificationStatus => _otpVerificationStatus ?? '';
+  bool hasOtpVerificationStatus() => _otpVerificationStatus != null;
+
+  String? _pickupOtp;
+  String get pickupOtp => _pickupOtp ?? '';
+  bool hasPickupOtp() => _pickupOtp != null;
+
+  DateTime? _otpVerifiedAt;
+  DateTime? get otpVerifiedAt => _otpVerifiedAt;
+  bool hasOtpVerifiedAt() => _otpVerifiedAt != null;
+
+  String? _proofPhotoUrl;
+  String get proofPhotoUrl => _proofPhotoUrl ?? '';
+  bool hasProofPhotoUrl() => _proofPhotoUrl != null;
+
   void _initializeFields() {
     _driverName = snapshotData['driverName'] as String?;
     _id = snapshotData['id'] as String?;
@@ -75,6 +115,17 @@ class LogisticsResponseRecord extends FirestoreRecord {
       DeliveryTimelineStruct.fromMap,
     );
     _swftTrackID = snapshotData['swftTrackID'] as String?;
+    _requestId = snapshotData['request_id'] as String?;
+    _externalRequestId = snapshotData['external_request_id'] as String?;
+    _deliveryOrderId = snapshotData['delivery_order_id'] as String?;
+    _originalSourceLocationId =
+        snapshotData['original_source_location_id'] as String?;
+    _inventorySource = snapshotData['inventory_source'] as String?;
+    _returnDestinationType = snapshotData['return_destination_type'] as String?;
+    _otpVerificationStatus = snapshotData['otp_verification_status'] as String?;
+    _pickupOtp = snapshotData['pickup_otp'] as String?;
+    _otpVerifiedAt = snapshotData['otp_verified_at'] as DateTime?;
+    _proofPhotoUrl = snapshotData['proof_photo_url'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -121,6 +172,16 @@ Map<String, dynamic> createLogisticsResponseRecordData({
   DateTime? updatedAt,
   TimingStruct? timing,
   String? swftTrackID,
+  String? requestId,
+  String? externalRequestId,
+  String? deliveryOrderId,
+  String? originalSourceLocationId,
+  String? inventorySource,
+  String? returnDestinationType,
+  String? otpVerificationStatus,
+  String? pickupOtp,
+  DateTime? otpVerifiedAt,
+  String? proofPhotoUrl,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -132,6 +193,16 @@ Map<String, dynamic> createLogisticsResponseRecordData({
       'updated_at': updatedAt,
       'timing': TimingStruct().toMap(),
       'swftTrackID': swftTrackID,
+      'request_id': requestId,
+      'external_request_id': externalRequestId,
+      'delivery_order_id': deliveryOrderId,
+      'original_source_location_id': originalSourceLocationId,
+      'inventory_source': inventorySource,
+      'return_destination_type': returnDestinationType,
+      'otp_verification_status': otpVerificationStatus,
+      'pickup_otp': pickupOtp,
+      'otp_verified_at': otpVerifiedAt,
+      'proof_photo_url': proofPhotoUrl,
     }.withoutNulls,
   );
 

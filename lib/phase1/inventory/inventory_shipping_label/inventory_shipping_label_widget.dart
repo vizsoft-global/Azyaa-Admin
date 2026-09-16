@@ -1764,6 +1764,9 @@ class _InventoryShippingLabelWidgetState
                                                                               fromAddress: columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1,
                                                                               fromCity: columnUsersRecord.designerMainInfo.designerPickupAddress.city,
                                                                               fromCountry: columnUsersRecord.designerMainInfo.designerPickupAddress.country,
+                                                                              fromBuilding: columnUsersRecord.designerMainInfo.designerPickupAddress.building,
+                                                                              fromBlock: columnUsersRecord.designerMainInfo.designerPickupAddress.block,
+                                                                              fromGovernorate: columnUsersRecord.designerMainInfo.designerPickupAddress.state,
                                                                               fromlatitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).firstOrNull,
                                                                               fromlongitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).lastOrNull,
                                                                               toName: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.shippingName,
@@ -1771,6 +1774,9 @@ class _InventoryShippingLabelWidgetState
                                                                               toAddress: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1,
                                                                               toCity: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city,
                                                                               toCountry: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country,
+                                                                              toBuilding: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.building,
+                                                                              toBlock: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.block,
+                                                                              toGovernorate: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.state,
                                                                               tolatitude: functions.getlatlong(shippinglabelSettingsRecord!.settingsCompanyInfo.wearhouseAddress.latLong!).firstOrNull,
                                                                               tolongitude: functions.getlatlong(shippinglabelSettingsRecord.settingsCompanyInfo.wearhouseAddress.latLong!).lastOrNull,
                                                                               packageCount: valueOrDefault<int>(
@@ -1789,6 +1795,8 @@ class _InventoryShippingLabelWidgetState
                                                                               fromCountryCode: 'KW',
                                                                               itemsListJson: FFAppState().item.toMap(),
                                                                               deliveryInstructions: _model.textController1.text,
+                                                                              designerId: columnUsersRecord.designerMainInfo.designerId,
+                                                                              customerUserId: columnUsersRecord.uid,
                                                                             );
 
                                                                             _shouldSetState =
@@ -1927,6 +1935,9 @@ class _InventoryShippingLabelWidgetState
                                                                               fromAddress: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1,
                                                                               fromCity: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city,
                                                                               fromCountry: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country,
+                                                                              fromBuilding: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.building,
+                                                                              fromBlock: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.block,
+                                                                              fromGovernorate: shippinglabelSettingsRecord?.settingsCompanyInfo.wearhouseAddress.state,
                                                                               fromlatitude: functions.getlatlong(shippinglabelSettingsRecord!.settingsCompanyInfo.wearhouseAddress.latLong!).firstOrNull,
                                                                               fromlongitude: functions.getlatlong(shippinglabelSettingsRecord.settingsCompanyInfo.wearhouseAddress.latLong!).lastOrNull,
                                                                               toName: columnUsersRecord.designerMainInfo.designerPickupAddress.shippingName,
@@ -1934,6 +1945,9 @@ class _InventoryShippingLabelWidgetState
                                                                               toAddress: columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1,
                                                                               toCity: columnUsersRecord.designerMainInfo.designerPickupAddress.city,
                                                                               toCountry: columnUsersRecord.designerMainInfo.designerPickupAddress.country,
+                                                                              toBuilding: columnUsersRecord.designerMainInfo.designerPickupAddress.building,
+                                                                              toBlock: columnUsersRecord.designerMainInfo.designerPickupAddress.block,
+                                                                              toGovernorate: columnUsersRecord.designerMainInfo.designerPickupAddress.state,
                                                                               tolatitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).firstOrNull,
                                                                               tolongitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).lastOrNull,
                                                                               packageCount: valueOrDefault<int>(
@@ -1952,6 +1966,8 @@ class _InventoryShippingLabelWidgetState
                                                                               toEmail: columnUsersRecord.designerMainInfo.designerPickupAddress.shippingEmail,
                                                                               toCountryCode: 'KW',
                                                                               fromCountryCode: 'KW',
+                                                                              designerId: columnUsersRecord.designerMainInfo.designerId,
+                                                                              customerUserId: columnUsersRecord.uid,
                                                                             );
 
                                                                             _shouldSetState =

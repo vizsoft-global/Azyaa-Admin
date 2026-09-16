@@ -1,8 +1,10 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import '/flutter_flow/flutter_flow_util.dart';
+import '/backend/store_valley/store_valley_legacy.dart';
+import '/backend/store_valley/store_valley_service.dart';
 import 'api_manager.dart';
 
 export 'api_manager.dart' show ApiCallResponse;
@@ -1051,14 +1053,11 @@ class GetRefundStatusCall {
 class PrimeExpressDeliveryGroup {
   static String getBaseUrl({
     String? url = 'https://backend.vizsoft.in/',
-    String? key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzY1MzQwMTAxLCJleHAiOjE3NjUzNjE3MDF9.XA7cnqzQptCriT8LXqyKa_esjOz5n1aIgnFb6eV0g4w',
+    String? key = '',
   }) =>
       '${url}';
   static Map<String, String> headers = {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer [KEY]',
-    'x-requested-with': 'https://proxy.vizsoft.in',
   };
   static GetAccessTokenCall getAccessTokenCall = GetAccessTokenCall();
   static CreateDeliveryCall createDeliveryCall = CreateDeliveryCall();
@@ -1069,46 +1068,15 @@ class PrimeExpressDeliveryGroup {
 class GetAccessTokenCall {
   Future<ApiCallResponse> call({
     String? env = 'test',
-    String? clientId = '05187287-2234-45b4-8b15-d60631a30be9',
-    String? clientSecret =
-        '6f04809c0b0454bcd8f37871c6993a7fcca0058d3ac111392cfd50082b9567f4',
-    String? url = 'https://backend.vizsoft.in/',
-    String? key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzY1MzQwMTAxLCJleHAiOjE3NjUzNjE3MDF9.XA7cnqzQptCriT8LXqyKa_esjOz5n1aIgnFb6eV0g4w',
+    String? clientId = '',
+    String? clientSecret = '',
+    String? url = '',
+    String? key = '',
   }) async {
-    final baseUrl = PrimeExpressDeliveryGroup.getBaseUrl(
-      url: url,
-      key: key,
-    );
-
-    final ffApiRequestBody = '''
-{
-  "client_id": "${escapeStringForJson(clientId)}",
-  "client_secret": "${escapeStringForJson(clientSecret)}",
-  "scope": [
-    "create-orders",
-    "cancel-orders",
-    "track-orders"
-  ]
-}''';
-    return ApiManager.instance.makeApiCall(
-      callName: 'Get access token',
-      apiUrl: '${baseUrl}getaccess_token/url=${env}',
-      callType: ApiCallType.POST,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${key}',
-        'x-requested-with': 'https://proxy.vizsoft.in',
-      },
-      params: {},
-      body: ffApiRequestBody,
-      bodyType: BodyType.JSON,
-      returnBody: true,
-      encodeBodyUtf8: false,
-      decodeUtf8: false,
-      cache: false,
-      isStreamingApi: false,
-      alwaysAllowBody: false,
+    return ApiCallResponse(
+      {'accessToken': 'store-valley'},
+      const {},
+      200,
     );
   }
 
@@ -1148,103 +1116,61 @@ class CreateDeliveryCall {
     String? fromCountryCode = '',
     String? toEmail = '',
     String? deliveryInstructions = '',
-    String? url = 'https://backend.vizsoft.in/',
-    String? key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzY1MzQwMTAxLCJleHAiOjE3NjUzNjE3MDF9.XA7cnqzQptCriT8LXqyKa_esjOz5n1aIgnFb6eV0g4w',
+    String? url = '',
+    String? key = '',
+    String? designerId,
+    String? warehouseId,
+    String? pickupLocationId,
+    String? packagingProfile,
+    String? originalSourceLocationId,
+    String? pickupPurpose,
+    String? customerUserId,
+    String? orderKind,
+    String? fromBuilding,
+    String? fromBlock,
+    String? fromGovernorate,
+    String? toBuilding,
+    String? toBlock,
+    String? toGovernorate,
   }) async {
-    final baseUrl = PrimeExpressDeliveryGroup.getBaseUrl(
-      url: url,
-      key: key,
-    );
-
-    final itemsList = _serializeJson(itemsListJson, true);
-    final ffApiRequestBody = '''
-{
-  "reference": "${escapeStringForJson(orderID)}",
-  "trackingNumber": "${escapeStringForJson(invtrackID)}",
-  "brandName": "Azyaa",
-  "currency": "KWD",
-  "retailerLocationIdentifier": 0,
-  "retailerLocation": {
-    "name": "${escapeStringForJson(fromName)}",
-    "country": "${escapeStringForJson(fromCountry)}",
-    "city": "${escapeStringForJson(fromCity)}",
-    "countryCode": "${escapeStringForJson(fromCountryCode)}",
-    "addressLine1": "${escapeStringForJson(fromAddress)}",
-    "addressLine2": "",
-    "company": "",
-    "stateProvince": "",
-    "stateProvinceCode": "",
-    "zipPostalCode": "",
-    "area": "",
-    "street": "",
-    "building": "",
-    "landMark": "",
-    "coordinates": {
-      "latitude": ${fromlatitude},
-      "longitude": ${fromlongitude}
-    },
-    "phone": "${escapeStringForJson(fromPhone)}",
-    "mapsLink": ""
-  },
-  "customerInfo": {
-    "name": "${escapeStringForJson(toName)}",
-    "phone": "${escapeStringForJson(toPhone)}",
-    "email": "${escapeStringForJson(toEmail)}",
-    "country": "${escapeStringForJson(toCountry)}",
-    "city": "${escapeStringForJson(toCity)}",
-    "countryCode": "${escapeStringForJson(toCountryCode)}",
-    "addressLine1": "${escapeStringForJson(toAddress)}",
-    "addressLine2": "",
-    "company": "",
-    "stateProvince": "",
-    "stateProvinceCode": "",
-    "zipPostalCode": "",
-    "area": "",
-    "street": "",
-    "building": "",
-    "landMark": "",
-    "coordinates": {
-      "latitude": ${tolatitude},
-      "longitude": ${tolongitude}
-    },
-    "mapsLink": ""
-  },
-  "paymentAmount": ${amount},
-  "profileName": "string",
-  "isReverse": ${returnStatus},
-  "requireDeliveryNote": false,
-  "requireProofOfId": false,
-  "requireCustomerProofSignature": true,
-  "deliveryInstructions": "${escapeStringForJson(deliveryInstructions)}",
-  "fulfillmentInstructions": "",
-  "packageCount": ${packageCount},
-  "items": [
-    ${itemsList}
-  ],
-  "requireOtpOnDelivery": ${otpOnDelivery},
-  "b2bHandling": ${b2bHandling},
-  "oversized": ${oversized},
-  "chilled": false
-}''';
-    return ApiManager.instance.makeApiCall(
-      callName: 'Create Delivery',
-      apiUrl: '${baseUrl}create_order/url=${env}',
-      callType: ApiCallType.POST,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${key}',
-        'x-requested-with': 'https://proxy.vizsoft.in',
-      },
-      params: {},
-      body: ffApiRequestBody,
-      bodyType: BodyType.JSON,
-      returnBody: true,
-      encodeBodyUtf8: false,
-      decodeUtf8: false,
-      cache: false,
-      isStreamingApi: false,
-      alwaysAllowBody: false,
+    final customerFacing = b2bHandling != true && returnStatus != true;
+    return StoreValleyLegacyMapper.create(
+      orderID: orderID ?? '',
+      invtrackID: invtrackID ?? '',
+      fromName: fromName ?? '',
+      fromPhone: fromPhone ?? '',
+      fromAddress: fromAddress ?? '',
+      fromCity: fromCity ?? '',
+      fromCountry: fromCountry ?? '',
+      fromlatitude: fromlatitude,
+      fromlongitude: fromlongitude,
+      toName: toName ?? '',
+      toPhone: toPhone ?? '',
+      toAddress: toAddress ?? '',
+      toCity: toCity ?? '',
+      toCountry: toCountry ?? '',
+      tolatitude: tolatitude,
+      tolongitude: tolongitude,
+      itemsListJson: itemsListJson,
+      otpOnDelivery: otpOnDelivery ?? customerFacing,
+      b2bHandling: b2bHandling ?? false,
+      returnStatus: returnStatus ?? false,
+      deliveryInstructions: deliveryInstructions,
+      toEmail: toEmail,
+      designerId: designerId,
+      warehouseId: warehouseId,
+      pickupLocationId: pickupLocationId,
+      packagingProfile: packagingProfile,
+      originalSourceLocationId: originalSourceLocationId,
+      pickupPurpose: pickupPurpose,
+      customerUserId: customerUserId,
+      orderKind: orderKind,
+      fromBuilding: fromBuilding,
+      fromBlock: fromBlock,
+      fromGovernorate: fromGovernorate,
+      toBuilding: toBuilding,
+      toBlock: toBlock,
+      toGovernorate: toGovernorate,
     );
   }
 
@@ -1270,32 +1196,32 @@ class TrackDeliveryCall {
   Future<ApiCallResponse> call({
     String? env = '',
     String? trackID = '',
-    String? url = 'https://backend.vizsoft.in/',
-    String? key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzY1MzQwMTAxLCJleHAiOjE3NjUzNjE3MDF9.XA7cnqzQptCriT8LXqyKa_esjOz5n1aIgnFb6eV0g4w',
+    String? url = '',
+    String? key = '',
   }) async {
-    final baseUrl = PrimeExpressDeliveryGroup.getBaseUrl(
-      url: url,
-      key: key,
-    );
-
-    return ApiManager.instance.makeApiCall(
-      callName: 'Track Delivery',
-      apiUrl: '${baseUrl}track_order/url=${env}/${trackID}',
-      callType: ApiCallType.GET,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${key}',
-        'x-requested-with': 'https://proxy.vizsoft.in',
-      },
-      params: {},
-      returnBody: true,
-      encodeBodyUtf8: false,
-      decodeUtf8: false,
-      cache: false,
-      isStreamingApi: false,
-      alwaysAllowBody: false,
-    );
+    final service = StoreValleyService.instance;
+    final id = trackID ?? '';
+    try {
+      final order = await service.getDelivery(id);
+      return service.toTrackResponse(order.toJson());
+    } on StoreValleyException {
+      try {
+        final intake = await service.getIntake(id);
+        return service.toTrackResponse(intake.toJson());
+      } on StoreValleyException {
+        try {
+          final pickup = await service.getPickup(id);
+          return service.toTrackResponse(pickup.toJson());
+        } on StoreValleyException {
+          try {
+            final ret = await service.getReturn(id);
+            return service.toTrackResponse(ret.toJson());
+          } on StoreValleyException catch (error) {
+            return service.errorResponse(error);
+          }
+        }
+      }
+    }
   }
 
   String? deliveryStage(dynamic response) => castToType<String>(getJsonField(
@@ -1320,33 +1246,19 @@ class CancelDeliveryCall {
   Future<ApiCallResponse> call({
     String? env = '',
     String? trackID = '',
-    String? url = 'https://backend.vizsoft.in/',
-    String? key =
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzY1MzQwMTAxLCJleHAiOjE3NjUzNjE3MDF9.XA7cnqzQptCriT8LXqyKa_esjOz5n1aIgnFb6eV0g4w',
+    String? url = '',
+    String? key = '',
   }) async {
-    final baseUrl = PrimeExpressDeliveryGroup.getBaseUrl(
-      url: url,
-      key: key,
-    );
-
-    return ApiManager.instance.makeApiCall(
-      callName: 'Cancel Delivery',
-      apiUrl: '${baseUrl}cancel_order/url=${env}/${trackID}',
-      callType: ApiCallType.POST,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${key}',
-        'x-requested-with': 'https://proxy.vizsoft.in',
-      },
-      params: {},
-      bodyType: BodyType.JSON,
-      returnBody: true,
-      encodeBodyUtf8: false,
-      decodeUtf8: false,
-      cache: false,
-      isStreamingApi: false,
-      alwaysAllowBody: false,
-    );
+    final service = StoreValleyService.instance;
+    try {
+      final json = await service.cancelDelivery(trackID ?? '');
+      return service.toApiCallResponse({
+        ...json,
+        'status': json['status'] ?? 'cancelled',
+      });
+    } on StoreValleyException catch (error) {
+      return service.errorResponse(error);
+    }
   }
 
   String? state(dynamic response) => castToType<String>(getJsonField(

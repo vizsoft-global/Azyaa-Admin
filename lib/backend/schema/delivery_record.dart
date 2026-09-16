@@ -65,6 +65,16 @@ class DeliveryRecord extends FirestoreRecord {
   String get deliveryTrackingId => _deliveryTrackingId ?? '';
   bool hasDeliveryTrackingId() => _deliveryTrackingId != null;
 
+  // "delivery_type" field.
+  String? _deliveryType;
+  String get deliveryType => _deliveryType ?? '';
+  bool hasDeliveryType() => _deliveryType != null;
+
+  // "otp_verification_status" field.
+  String? _otpVerificationStatus;
+  String get otpVerificationStatus => _otpVerificationStatus ?? '';
+  bool hasOtpVerificationStatus() => _otpVerificationStatus != null;
+
   void _initializeFields() {
     _createdAt = snapshotData['created_at'] as DateTime?;
     _updatedAt = snapshotData['updated_at'] as DateTime?;
@@ -77,6 +87,9 @@ class DeliveryRecord extends FirestoreRecord {
     _assignedBy = snapshotData['assigned_by'] as DocumentReference?;
     _deliveryId = snapshotData['delivery_id'] as String?;
     _deliveryTrackingId = snapshotData['delivery_tracking_id'] as String?;
+    _deliveryType = snapshotData['delivery_type'] as String?;
+    _otpVerificationStatus =
+        snapshotData['otp_verification_status'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -124,6 +137,8 @@ Map<String, dynamic> createDeliveryRecordData({
   DocumentReference? assignedBy,
   String? deliveryId,
   String? deliveryTrackingId,
+  String? deliveryType,
+  String? otpVerificationStatus,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -137,6 +152,8 @@ Map<String, dynamic> createDeliveryRecordData({
       'assigned_by': assignedBy,
       'delivery_id': deliveryId,
       'delivery_tracking_id': deliveryTrackingId,
+      'delivery_type': deliveryType,
+      'otp_verification_status': otpVerificationStatus,
     }.withoutNulls,
   );
 
@@ -157,7 +174,9 @@ class DeliveryRecordDocumentEquality implements Equality<DeliveryRecord> {
         e1?.inventoryMovementRef == e2?.inventoryMovementRef &&
         e1?.assignedBy == e2?.assignedBy &&
         e1?.deliveryId == e2?.deliveryId &&
-        e1?.deliveryTrackingId == e2?.deliveryTrackingId;
+        e1?.deliveryTrackingId == e2?.deliveryTrackingId &&
+        e1?.deliveryType == e2?.deliveryType &&
+        e1?.otpVerificationStatus == e2?.otpVerificationStatus;
   }
 
   @override
@@ -171,7 +190,9 @@ class DeliveryRecordDocumentEquality implements Equality<DeliveryRecord> {
         e?.inventoryMovementRef,
         e?.assignedBy,
         e?.deliveryId,
-        e?.deliveryTrackingId
+        e?.deliveryTrackingId,
+        e?.deliveryType,
+        e?.otpVerificationStatus
       ]);
 
   @override

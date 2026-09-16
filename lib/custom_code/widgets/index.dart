@@ -14,3 +14,5 @@ export 'sortableand_filterable_users_web_export.dart'
     show SortableandFilterableUsersWebExport;
 export 'azyaa_list_toolbar.dart'
     show AzyaaListToolbar, AzyaaToolbarBox, AzyaaToolbarButtons;
+export 'warehouse_stock_cell.dart'
+    show WarehouseStockCell, WarehouseStockField;

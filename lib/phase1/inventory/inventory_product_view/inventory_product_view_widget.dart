@@ -9,6 +9,7 @@ import '/phase1/component/azyaa_responsive/azyaa_responsive_widget.dart';
 import '/phase1/component/azyaa_sidebar/azyaa_sidebar_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
+import '/custom_code/widgets/index.dart';
 import 'package:expandable/expandable.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -673,6 +674,72 @@ class _InventoryProductViewWidgetState
                                                                   ].divide(SizedBox(
                                                                       height:
                                                                           6.0)),
+                                                                ),
+                                                              ),
+                                                              VerticalDivider(
+                                                                thickness: 1.0,
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .border,
+                                                              ),
+                                                              Container(
+                                                                constraints:
+                                                                    BoxConstraints(
+                                                                  minWidth:
+                                                                      160.0,
+                                                                ),
+                                                                alignment:
+                                                                    AlignmentDirectional(
+                                                                        0.0,
+                                                                        0.0),
+                                                                child:
+                                                                    WarehouseStockCell(
+                                                                  productId:
+                                                                      containerInventoryRecord
+                                                                          .productId,
+                                                                  sku: containerInventoryRecord
+                                                                      .productSku,
+                                                                  field:
+                                                                      WarehouseStockField
+                                                                          .stored,
+                                                                  showLabel:
+                                                                      true,
+                                                                ),
+                                                              ),
+                                                              VerticalDivider(
+                                                                thickness: 1.0,
+                                                                color: FlutterFlowTheme.of(
+                                                                        context)
+                                                                    .border,
+                                                              ),
+                                                              Container(
+                                                                constraints:
+                                                                    BoxConstraints(
+                                                                  minWidth:
+                                                                      160.0,
+                                                                ),
+                                                                alignment:
+                                                                    AlignmentDirectional(
+                                                                        0.0,
+                                                                        0.0),
+                                                                child:
+                                                                    WarehouseStockCell(
+                                                                  productId:
+                                                                      containerInventoryRecord
+                                                                          .productId,
+                                                                  sku: containerInventoryRecord
+                                                                      .productSku,
+                                                                  field:
+                                                                      WarehouseStockField
+                                                                          .availableForOrder,
+                                                                  reserved:
+                                                                      containerInventoryRecord
+                                                                          .stockReserved,
+                                                                  unavailable:
+                                                                      containerInventoryRecord
+                                                                          .stockUnavailable,
+                                                                  showLabel:
+                                                                      true,
                                                                 ),
                                                               ),
                                                               VerticalDivider(
@@ -1439,6 +1506,28 @@ class _InventoryProductViewWidgetState
                                                                                                       ].divide(SizedBox(height: 6.0)),
                                                                                                     ),
                                                                                                   ),
+                                                                                                  Container(
+                                                                                                    width: 200.0,
+                                                                                                    decoration: BoxDecoration(),
+                                                                                                    child: WarehouseStockCell(
+                                                                                                      productId: containerInventoryRecord.productId,
+                                                                                                      sku: containerInventoryRecord.productSku,
+                                                                                                      field: WarehouseStockField.stored,
+                                                                                                      showLabel: true,
+                                                                                                    ),
+                                                                                                  ),
+                                                                                                  Container(
+                                                                                                    width: 200.0,
+                                                                                                    decoration: BoxDecoration(),
+                                                                                                    child: WarehouseStockCell(
+                                                                                                      productId: containerInventoryRecord.productId,
+                                                                                                      sku: containerInventoryRecord.productSku,
+                                                                                                      field: WarehouseStockField.availableForOrder,
+                                                                                                      reserved: containerInventoryRecord.stockReserved,
+                                                                                                      unavailable: containerInventoryRecord.stockUnavailable,
+                                                                                                      showLabel: true,
+                                                                                                    ),
+                                                                                                  ),
                                                                                                   StreamBuilder<UsersRecord>(
                                                                                                     stream: UsersRecord.getDocument(productContainerProductsRecord.productAuthorizer.productDesignerRef!),
                                                                                                     builder: (context, snapshot) {
@@ -1582,9 +1671,7 @@ class _InventoryProductViewWidgetState
                                                                                                       crossAxisAlignment: CrossAxisAlignment.start,
                                                                                                       children: [
                                                                                                         Text(
-                                                                                                          FFLocalizations.of(context).getText(
-                                                                                                            'xr73944t' /* Committed */,
-                                                                                                          ),
+                                                                                                          'Reserved',
                                                                                                           style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                                 font: GoogleFonts.inter(
                                                                                                                   fontWeight: FontWeight.normal,
@@ -1601,7 +1688,10 @@ class _InventoryProductViewWidgetState
                                                                                                               ),
                                                                                                         ),
                                                                                                         SelectionArea(
-                                                                                                            child: Text(
+                                                                                                            child: Tooltip(
+                                                                                                          message:
+                                                                                                              'Paid warehouse orders not shipped yet',
+                                                                                                          child: Text(
                                                                                                           containerInventoryRecord.stockReserved.toString(),
                                                                                                           style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                                 font: GoogleFonts.inter(
@@ -1617,7 +1707,7 @@ class _InventoryProductViewWidgetState
                                                                                                                 fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
                                                                                                                 fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                                               ),
-                                                                                                        )),
+                                                                                                        ))),
                                                                                                       ].divide(SizedBox(height: 6.0)),
                                                                                                     ),
                                                                                                   ),

@@ -4699,23 +4699,14 @@ class _AzyaaSidebarWidgetState extends State<AzyaaSidebarWidget> {
                                                       SizedBox(width: 16.0)),
                                             ),
                                           ),
-                                        if (((FFAppState()
-                                                        .currentUserPermission
-                                                        .contains(
-                                                            'super_admin') ==
-                                                    true) ||
-                                                (FFAppState()
-                                                        .currentUserPermission
-                                                        .contains(
-                                                            'inventory') ==
-                                                    true)) &&
-                                            responsiveVisibility(
-                                              context: context,
-                                              phone: false,
-                                              tablet: false,
-                                              tabletLandscape: false,
-                                              desktop: false,
-                                            ))
+                                        if ((FFAppState()
+                                                    .currentUserPermission
+                                                    .contains('inventory') ==
+                                                true) ||
+                                            (FFAppState()
+                                                    .currentUserPermission
+                                                    .contains('super_admin') ==
+                                                true))
                                           Container(
                                             width: double.infinity,
                                             decoration: BoxDecoration(

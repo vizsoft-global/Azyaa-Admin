@@ -6943,32 +6943,32 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'إعدادات الشركة',
     },
     'xbz5ut59': {
-      'en': 'Name',
-      'ar': 'اسم الشركة',
+      'en': 'Contact name',
+      'ar': 'اسم جهة الاتصال',
     },
     '3114l1wn': {
       'en': '',
       'ar': '',
     },
     'lgtlw3d2': {
-      'en': 'Name',
-      'ar': 'اسم',
+      'en': 'Contact name',
+      'ar': 'اسم جهة الاتصال',
     },
     'jq756i7f': {
-      'en': 'Phone Number',
-      'ar': 'رقم التليفون',
+      'en': 'Contact phone',
+      'ar': 'هاتف التواصل',
     },
     'hoyt1p2i': {
       'en': '',
       'ar': '',
     },
     'wpmc0zgu': {
-      'en': 'Phone Number',
-      'ar': 'رقم التليفون',
+      'en': 'Contact phone',
+      'ar': 'هاتف التواصل',
     },
     'smukgpvt': {
-      'en': 'Address',
-      'ar': 'عنوان',
+      'en': 'Street',
+      'ar': 'الشارع',
     },
     'uv1cwc0r': {
       'en': '',
@@ -6991,16 +6991,16 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'مدينة',
     },
     'gmqdvcuw': {
-      'en': 'Regoin',
-      'ar': 'عنوان',
+      'en': 'Governorate',
+      'ar': 'المحافظة',
     },
     'zga4dmmj': {
       'en': '',
       'ar': '',
     },
     'b5nm130n': {
-      'en': 'Region',
-      'ar': 'منطقة',
+      'en': 'Governorate',
+      'ar': 'المحافظة',
     },
     '7yonh9ex': {
       'en': 'Country',
@@ -7015,16 +7015,16 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     'ue4lp2du': {
-      'en': 'Postal Code',
-      'ar': 'عنوان',
+      'en': 'Building',
+      'ar': 'المبنى',
     },
     'bulqzbos': {
       'en': '',
       'ar': '',
     },
     'mp6hwge4': {
-      'en': 'PostalCode',
-      'ar': 'رمز بريدي',
+      'en': 'Building',
+      'ar': 'المبنى',
     },
     'a9cr07d3': {
       'en': 'Location',
@@ -9094,24 +9094,28 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     '5lyrue2r': {
-      'en': 'Address 1',
-      'ar': '',
+      'en': 'Street',
+      'ar': 'الشارع',
     },
     'oq6xtrjh': {
       'en': 'City',
       'ar': '',
     },
     'mvcp67ma': {
-      'en': 'Region',
-      'ar': '',
+      'en': 'Governorate',
+      'ar': 'المحافظة',
     },
     'uxho0jjb': {
       'en': 'Country',
       'ar': '',
     },
     'wqq9ksi2': {
-      'en': 'Postal Code',
-      'ar': '',
+      'en': 'Building',
+      'ar': 'المبنى',
+    },
+    'svdispblk': {
+      'en': 'Block',
+      'ar': 'القطعة',
     },
     '4e0pg1t3': {
       'en': 'Map location',
@@ -10265,7 +10269,7 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
     },
     'v775mn0w': {
       'en': 'Pending',
-      'ar': '',
+      'ar': 'قيد الانتظار',
     },
     'wvxfzqxr': {
       'en': 'Auto-Approval',
@@ -19422,40 +19426,40 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'تحرير سريع',
     },
     'dd4n57td': {
-      'en': 'Name',
-      'ar': 'الاسم',
+      'en': 'Contact name',
+      'ar': 'اسم جهة الاتصال',
     },
     'q0zib4se': {
       'en': '',
       'ar': '',
     },
     'qclhgxjw': {
-      'en': 'Enter your name',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter contact name',
+      'ar': 'أدخل اسم جهة الاتصال',
     },
     'qyuslp1j': {
-      'en': 'Mobile Number',
-      'ar': 'رقم الجوال',
+      'en': 'Contact phone',
+      'ar': 'هاتف التواصل',
     },
     'ertg25bt': {
       'en': '',
       'ar': '',
     },
     'q437wnfa': {
-      'en': 'Enter your mobile number',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter contact phone',
+      'ar': 'أدخل هاتف التواصل',
     },
     'act2xga8': {
-      'en': 'Address ',
-      'ar': 'العنوان ',
+      'en': 'Street',
+      'ar': 'الشارع',
     },
     'bnjpeih7': {
       'en': '',
       'ar': '',
     },
     '1xo2bm4q': {
-      'en': 'Enter your address',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter street',
+      'ar': 'أدخل الشارع',
     },
     '4z4qifoa': {
       'en': 'City',
@@ -19470,16 +19474,16 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'أدخل النص الخاص بك',
     },
     'nqi7otwh': {
-      'en': 'Region',
-      'ar': 'المنطقة',
+      'en': 'Governorate',
+      'ar': 'المحافظة',
     },
     'nof9hnbj': {
       'en': '',
       'ar': '',
     },
     '8y0x2hh9': {
-      'en': 'Enter your region',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter governorate',
+      'ar': 'أدخل المحافظة',
     },
     'izgvz9bs': {
       'en': 'Country',
@@ -19494,23 +19498,31 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     'jj7l3wal': {
-      'en': 'Postal Code',
-      'ar': 'الرمز البريدي',
+      'en': 'Building',
+      'ar': 'المبنى',
     },
     'ozw9oh32': {
       'en': '',
       'ar': '',
     },
     '4jfhhusb': {
-      'en': 'Enter your postal code',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter building',
+      'ar': 'أدخل المبنى',
+    },
+    'svaddrblk': {
+      'en': 'Block',
+      'ar': 'القطعة',
+    },
+    'svaddrblkh': {
+      'en': 'Enter block',
+      'ar': 'أدخل القطعة',
     },
     '6ce6jgbp': {
       'en': 'Map Location',
       'ar': 'الموقع علي الخريطة',
     },
     'pk0brogw': {
-      'en': 'Name is required',
+      'en': 'Contact name is required',
       'ar': '',
     },
     'w9jchib9': {
@@ -19526,7 +19538,7 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     '5r4gge7t': {
-      'en': 'Mobile Number is required',
+      'en': 'Contact phone is required',
       'ar': '',
     },
     'alhr05qs': {
@@ -19538,7 +19550,7 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     'b70a42t8': {
-      'en': 'Address is required',
+      'en': 'Street is required',
       'ar': '',
     },
     '567oemd0': {
@@ -19629,40 +19641,40 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'تحرير سريع',
     },
     'npyqduu0': {
-      'en': 'Name',
-      'ar': 'الاسم',
+      'en': 'Contact name',
+      'ar': 'اسم جهة الاتصال',
     },
     'g2nwfyim': {
       'en': '',
       'ar': '',
     },
     'c5w0pa23': {
-      'en': 'Enter your name',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter contact name',
+      'ar': 'أدخل اسم جهة الاتصال',
     },
     '5bqv64zn': {
-      'en': 'Mobile Number',
-      'ar': 'رمز المنتج',
+      'en': 'Contact phone',
+      'ar': 'هاتف التواصل',
     },
     '8dm26fl3': {
       'en': '',
       'ar': '',
     },
     'gcudb4m8': {
-      'en': 'Enter your mobile number',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter contact phone',
+      'ar': 'أدخل هاتف التواصل',
     },
     'hl43lc93': {
-      'en': 'Address ',
-      'ar': 'العنوان ',
+      'en': 'Street',
+      'ar': 'الشارع',
     },
     'xy5ehs5u': {
       'en': '',
       'ar': '',
     },
     'olwp5iad': {
-      'en': 'Enter your address',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter street',
+      'ar': 'أدخل الشارع',
     },
     'liagh04m': {
       'en': 'City',
@@ -19677,16 +19689,16 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': 'أدخل النص الخاص بك',
     },
     'ms4jdlub': {
-      'en': 'Region',
-      'ar': 'المنطقة',
+      'en': 'Governorate',
+      'ar': 'المحافظة',
     },
     'fs5xnn04': {
       'en': '',
       'ar': '',
     },
     'hg6ruy3s': {
-      'en': 'Select your region',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter governorate',
+      'ar': 'أدخل المحافظة',
     },
     'rfoijop1': {
       'en': 'Country',
@@ -19701,24 +19713,24 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     'xmp52o2p': {
-      'en': 'Postal Code',
-      'ar': 'الرمز البريدي',
+      'en': 'Building',
+      'ar': 'المبنى',
     },
     '4vh6w3tk': {
       'en': '',
       'ar': '',
     },
     'xv791nvi': {
-      'en': 'Enter your postal code',
-      'ar': 'أدخل النص الخاص بك',
+      'en': 'Enter building',
+      'ar': 'أدخل المبنى',
     },
     'jhsefxxe': {
       'en': 'Map Location',
       'ar': 'الموقع علي الخريطة',
     },
     '90au1n4s': {
-      'en': 'Name is required',
-      'ar': 'الاسم مطلوب',
+      'en': 'Contact name is required',
+      'ar': 'اسم جهة الاتصال مطلوب',
     },
     'ullys7yv': {
       'en': 'Minimum 3 characters are required',
@@ -19733,8 +19745,8 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     'hs616f7h': {
-      'en': 'Mobile number is required',
-      'ar': 'رقم  الجوال مطلوب',
+      'en': 'Contact phone is required',
+      'ar': 'هاتف التواصل مطلوب',
     },
     'y48wlijm': {
       'en': 'Please enter a valid mobile number.(GCC)',
@@ -19745,8 +19757,8 @@ final kTranslationsMap = <Map<String, Map<String, String>>>[
       'ar': '',
     },
     '1brfhh1l': {
-      'en': 'Address is required',
-      'ar': 'العنوان مطلوب',
+      'en': 'Street is required',
+      'ar': 'الشارع مطلوب',
     },
     '8jiditsv': {
       'en': 'Minimum 3 characters are required',

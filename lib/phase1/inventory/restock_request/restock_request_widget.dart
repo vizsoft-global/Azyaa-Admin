@@ -1,5 +1,6 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/store_valley/restock_request_origin.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -2299,6 +2300,7 @@ class _RestockRequestWidgetState extends State<RestockRequestWidget> {
                                         'INVRSQ${_model.idmapresult?.inventoryRequestId.toString()}',
                                     requestStatus: 'Pending',
                                     requestType: 'Restock',
+                                    raisedBy: RestockRequestOrigin.admin,
                                     clearUnsetFields: false,
                                     create: true,
                                   ),
@@ -2359,6 +2361,7 @@ class _RestockRequestWidgetState extends State<RestockRequestWidget> {
                                                 'INVRSQ${_model.idmapresult?.inventoryRequestId.toString()}',
                                             requestStatus: 'Pending',
                                             requestType: 'Restock',
+                                            raisedBy: RestockRequestOrigin.admin,
                                             clearUnsetFields: false,
                                             create: true,
                                           ),

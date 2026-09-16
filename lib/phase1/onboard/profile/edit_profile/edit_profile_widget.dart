@@ -1859,7 +1859,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                                                                           children: [
                                                                                             Text(
                                                                                               FFLocalizations.of(context).getText(
-                                                                                                '5lyrue2r' /* Address 1 */,
+                                                                                                '5lyrue2r' /* Street */,
                                                                                               ),
                                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                     font: GoogleFonts.inter(
@@ -1958,7 +1958,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                                                                           children: [
                                                                                             Text(
                                                                                               FFLocalizations.of(context).getText(
-                                                                                                'mvcp67ma' /* Region */,
+                                                                                                'mvcp67ma' /* Governorate */,
                                                                                               ),
                                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                     font: GoogleFonts.inter(
@@ -2038,7 +2038,7 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                                                                           children: [
                                                                                             Text(
                                                                                               FFLocalizations.of(context).getText(
-                                                                                                'wqq9ksi2' /* Postal Code */,
+                                                                                                'wqq9ksi2' /* Building */,
                                                                                               ),
                                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                     font: GoogleFonts.inter(
@@ -2054,7 +2054,47 @@ class _EditProfileWidgetState extends State<EditProfileWidget> {
                                                                                             ),
                                                                                             SelectionArea(
                                                                                                 child: Text(
-                                                                                              currentUserDocument!.designerMainInfo.designerPickupAddress.postalCode,
+                                                                                              currentUserDocument!.designerMainInfo.designerPickupAddress.building,
+                                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                    font: GoogleFonts.inter(
+                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                                    fontSize: 12.0,
+                                                                                                    letterSpacing: 0.0,
+                                                                                                    fontWeight: FontWeight.w500,
+                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                  ),
+                                                                                            )),
+                                                                                          ].divide(SizedBox(height: 6.0)),
+                                                                                        ),
+                                                                                      ),
+                                                                                      Container(
+                                                                                        width: 200.0,
+                                                                                        decoration: BoxDecoration(),
+                                                                                        child: Column(
+                                                                                          mainAxisSize: MainAxisSize.min,
+                                                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                          children: [
+                                                                                            Text(
+                                                                                              FFLocalizations.of(context).getText(
+                                                                                                'svdispblk' /* Block */,
+                                                                                              ),
+                                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                                    font: GoogleFonts.inter(
+                                                                                                      fontWeight: FontWeight.normal,
+                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                    ),
+                                                                                                    color: FlutterFlowTheme.of(context).secondaryText,
+                                                                                                    fontSize: 12.0,
+                                                                                                    letterSpacing: 0.0,
+                                                                                                    fontWeight: FontWeight.normal,
+                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                                  ),
+                                                                                            ),
+                                                                                            SelectionArea(
+                                                                                                child: Text(
+                                                                                              currentUserDocument!.designerMainInfo.designerPickupAddress.block,
                                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                     font: GoogleFonts.inter(
                                                                                                       fontWeight: FontWeight.w500,

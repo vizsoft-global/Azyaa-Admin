@@ -14,6 +14,7 @@ import '/phase1/component/blank_loading/blank_loading_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/weightcomp/weightcomp_widget.dart';
 import 'dart:async';
+import '/backend/store_valley/warehouse_stock.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:collection/collection.dart';
@@ -82,6 +83,14 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  bool _shipFromDesigner() {
+    if (widget.type != 'shipcustomer') {
+      return true;
+    }
+    final item = FFAppState().deliveryflow.selectedItemss.firstOrNull;
+    return item != null && functions.shipmentTypeForCartItem(item) == 'custom';
   }
 
   @override
@@ -857,7 +866,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                             children: [
                                                                                               SelectionArea(
                                                                                                   child: Text(
-                                                                                                widget.type == 'shipcustomer' ? containerSettingsRecord!.settingsCompanyInfo.wearhouseAddress.addressLine1 : columnUsersRecord.designerMainInfo.designerPickupAddress.shippingName,
+                                                                                                !_shipFromDesigner() ? containerSettingsRecord!.settingsCompanyInfo.wearhouseAddress.addressLine1 : columnUsersRecord.designerMainInfo.designerPickupAddress.shippingName,
                                                                                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                                       font: GoogleFonts.inter(
                                                                                                         fontWeight: FontWeight.normal,
@@ -875,7 +884,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                   children: [
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1 : columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1,
+                                                                                                        !_shipFromDesigner() ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1 : columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -897,7 +906,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city : columnUsersRecord.designerMainInfo.designerPickupAddress.city,
+                                                                                                        !_shipFromDesigner() ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city : columnUsersRecord.designerMainInfo.designerPickupAddress.city,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -910,7 +919,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.state : columnUsersRecord.designerMainInfo.designerPickupAddress.state,
+                                                                                                        !_shipFromDesigner() ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.state : columnUsersRecord.designerMainInfo.designerPickupAddress.state,
                                                                                                         ' - ',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -923,7 +932,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country : columnUsersRecord.designerMainInfo.designerPickupAddress.country,
+                                                                                                        !_shipFromDesigner() ? containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country : columnUsersRecord.designerMainInfo.designerPickupAddress.country,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -1000,7 +1009,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                               SelectionArea(
                                                                                                   child: Text(
                                                                                                 valueOrDefault<String>(
-                                                                                                  widget.type == 'shipcustomer' ? ordersOrdersRecord.shippingAddress.shippingName : containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.shippingName,
+                                                                                                  ordersOrdersRecord.shippingAddress.shippingName,
                                                                                                   '-',
                                                                                                 ),
                                                                                                 style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -1020,7 +1029,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                   children: [
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? ordersOrdersRecord.shippingAddress.addressLine1 : containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1,
+                                                                                                        ordersOrdersRecord.shippingAddress.addressLine1,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -1042,7 +1051,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? ordersOrdersRecord.shippingAddress.city : containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city,
+                                                                                                        ordersOrdersRecord.shippingAddress.city,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -1055,7 +1064,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? ordersOrdersRecord.shippingAddress.state : containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.state,
+                                                                                                        ordersOrdersRecord.shippingAddress.state,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -1068,7 +1077,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                                     ),
                                                                                                     TextSpan(
                                                                                                       text: valueOrDefault<String>(
-                                                                                                        widget.type == 'shipcustomer' ? ordersOrdersRecord.shippingAddress.country : containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country,
+                                                                                                        ordersOrdersRecord.shippingAddress.country,
                                                                                                         '-',
                                                                                                       ),
                                                                                                       style: TextStyle(),
@@ -2858,6 +2867,97 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                               _model.addToProductIds(FFAppState().deliveryflow.selectedItemss.elementAtOrNull((_model.count!) - 1)!.productId);
                                                                               _model.count = (_model.count!) - 1;
                                                                             }
+                                                                            final selectedShipmentType = functions.shipmentTypeForCartItem(
+                                                                              FFAppState().deliveryflow.selectedItemss.firstOrNull ?? UserCartItemsStruct(),
+                                                                            );
+                                                                            final mixedSelection = FFAppState().deliveryflow.selectedItemss.any(
+                                                                              (item) => functions.shipmentTypeForCartItem(item) != selectedShipmentType,
+                                                                            );
+                                                                            if (mixedSelection) {
+                                                                              await showDialog(
+                                                                                context: context,
+                                                                                builder: (alertDialogContext) {
+                                                                                  return WebViewAware(
+                                                                                    child: AlertDialog(
+                                                                                      content: Text(FFLocalizations.of(context).getVariableText(
+                                                                                        enText: 'Ready-made and custom-made items must ship separately.',
+                                                                                        arText: 'يجب شحن المنتجات الجاهزة والمصنوعة حسب الطلب بشكل منفصل.',
+                                                                                      )),
+                                                                                      actions: [
+                                                                                        TextButton(
+                                                                                          onPressed: () => Navigator.pop(alertDialogContext),
+                                                                                          child: Text(FFLocalizations.of(context).getVariableText(
+                                                                                            enText: 'Ok',
+                                                                                            arText: 'نعم',
+                                                                                          )),
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                              return;
+                                                                            }
+                                                                            if (selectedShipmentType == 'ready' &&
+                                                                                functions.storeValleyDeliveryAlreadyOpen(ordersOrdersRecord.readyShippingRequestStatus)) {
+                                                                              await showDialog(
+                                                                                context: context,
+                                                                                builder: (alertDialogContext) {
+                                                                                  return WebViewAware(
+                                                                                    child: AlertDialog(
+                                                                                      content: Text(FFLocalizations.of(context).getVariableText(
+                                                                                        enText: 'Warehouse delivery was already requested automatically.',
+                                                                                        arText: 'تم طلب توصيل المستودع تلقائياً.',
+                                                                                      )),
+                                                                                      actions: [
+                                                                                        TextButton(
+                                                                                          onPressed: () => Navigator.pop(alertDialogContext),
+                                                                                          child: Text(FFLocalizations.of(context).getVariableText(
+                                                                                            enText: 'Ok',
+                                                                                            arText: 'نعم',
+                                                                                          )),
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                              return;
+                                                                            }
+                                                                            if (selectedShipmentType == 'custom' &&
+                                                                                functions.storeValleyDeliveryAlreadyOpen(ordersOrdersRecord.customShippingRequestStatus)) {
+                                                                              await showDialog(
+                                                                                context: context,
+                                                                                builder: (alertDialogContext) {
+                                                                                  return WebViewAware(
+                                                                                    child: AlertDialog(
+                                                                                      content: Text(FFLocalizations.of(context).getVariableText(
+                                                                                        enText: 'Pickup was already requested automatically.',
+                                                                                        arText: 'تم طلب الاستلام تلقائياً.',
+                                                                                      )),
+                                                                                      actions: [
+                                                                                        TextButton(
+                                                                                          onPressed: () => Navigator.pop(alertDialogContext),
+                                                                                          child: Text(FFLocalizations.of(context).getVariableText(
+                                                                                            enText: 'Ok',
+                                                                                            arText: 'نعم',
+                                                                                          )),
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                              return;
+                                                                            }
+                                                                            final customerOrderKind = functions.storeValleyOrderKindFromShipmentType(selectedShipmentType);
+                                                                            final customerClientOrderId = functions.clientOrderIdForShipment(
+                                                                              ordersOrdersRecord.orderId,
+                                                                              selectedShipmentType,
+                                                                            );
+                                                                            final readyPreferedDate = selectedShipmentType == 'ready'
+                                                                                ? functions.nextDayPreferedDate(getCurrentTimestamp)
+                                                                                : null;
                                                                             _model.idmapResult =
                                                                                 await queryIdMapRecordOnce(
                                                                               queryBuilder: (idMapRecord) => idMapRecord.where(
@@ -2925,19 +3025,25 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                 await PrimeExpressDeliveryGroup.createDeliveryCall.call(
                                                                               env: _model.settingsDoc?.settingsLogisticsInfo.environment == 'test' ? 'test' : 'prod',
                                                                               orderID: _model.idmapResult?.deliveryId.toString(),
-                                                                              invtrackID: ordersOrdersRecord.orderId,
-                                                                              fromName: _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.shippingName,
-                                                                              fromPhone: _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.shippingPhone,
-                                                                              fromAddress: _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.addressLine1,
-                                                                              fromCity: _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.city,
-                                                                              fromCountry: _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.country,
-                                                                              fromlatitude: functions.getlatlong(_model.settingsDoc!.settingsCompanyInfo.wearhouseAddress.latLong!).firstOrNull,
-                                                                              fromlongitude: functions.getlatlong(_model.settingsDoc!.settingsCompanyInfo.wearhouseAddress.latLong!).lastOrNull,
+                                                                              invtrackID: customerClientOrderId,
+                                                                              fromName: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.shippingName : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.shippingName,
+                                                                              fromPhone: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.shippingPhone : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.shippingPhone,
+                                                                              fromAddress: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1 : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.addressLine1,
+                                                                              fromCity: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.city : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.city,
+                                                                              fromCountry: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.country : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.country,
+                                                                              fromBuilding: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.building : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.building,
+                                                                              fromBlock: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.block : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.block,
+                                                                              fromGovernorate: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.state : _model.settingsDoc?.settingsCompanyInfo.wearhouseAddress.state,
+                                                                              fromlatitude: functions.getlatlong((selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.latLong : _model.settingsDoc!.settingsCompanyInfo.wearhouseAddress.latLong)!).firstOrNull,
+                                                                              fromlongitude: functions.getlatlong((selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerPickupAddress.latLong : _model.settingsDoc!.settingsCompanyInfo.wearhouseAddress.latLong)!).lastOrNull,
                                                                               toName: ordersOrdersRecord.shippingAddress.shippingName,
                                                                               toPhone: ordersOrdersRecord.shippingAddress.shippingPhone,
                                                                               toAddress: ordersOrdersRecord.shippingAddress.addressLine1,
                                                                               toCity: ordersOrdersRecord.shippingAddress.city,
                                                                               toCountry: ordersOrdersRecord.shippingAddress.country,
+                                                                              toBuilding: ordersOrdersRecord.shippingAddress.building,
+                                                                              toBlock: ordersOrdersRecord.shippingAddress.block,
+                                                                              toGovernorate: ordersOrdersRecord.shippingAddress.state,
                                                                               tolatitude: functions.getlatlong(ordersOrdersRecord.shippingAddress.latLong!).firstOrNull,
                                                                               tolongitude: functions.getlatlong(ordersOrdersRecord.shippingAddress.latLong!).lastOrNull,
                                                                               packageCount: valueOrDefault<int>(
@@ -2946,7 +3052,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                               ),
                                                                               url: isWeb ? 'https://proxy.vizsoft.in/https://backend.vizsoft.in/' : 'https://backend.vizsoft.in/',
                                                                               amount: 0.00,
-                                                                              otpOnDelivery: false,
+                                                                              otpOnDelivery: true,
                                                                               b2bHandling: false,
                                                                               oversized: false,
                                                                               returnStatus: false,
@@ -2956,6 +3062,10 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                               toEmail: ordersOrdersRecord.shippingAddress.shippingEmail,
                                                                               fromCountryCode: 'KW',
                                                                               toCountryCode: 'KW',
+                                                                              customerUserId: ordersOrdersRecord.customerId,
+                                                                              designerId: selectedShipmentType == 'custom' ? columnUsersRecord.designerMainInfo.designerId : FFAppState().deliveryflow.selectedItemss.firstOrNull?.productDesignerId,
+                                                                              orderKind: customerOrderKind,
+                                                                              pickupPurpose: selectedShipmentType == 'custom' ? 'custom_made_fulfillment' : null,
                                                                             );
 
                                                                             _shouldSetState =
@@ -2974,6 +3084,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                 deliveryTrackingId: PrimeExpressDeliveryGroup.createDeliveryCall.swftboxID(
                                                                                   (_model.apiResultShippingCreate?.jsonBody ?? ''),
                                                                                 ),
+                                                                                deliveryType: selectedShipmentType,
                                                                               ));
                                                                               _model.deliveryDoc = DeliveryRecord.getDocumentFromData(
                                                                                   createDeliveryRecordData(
@@ -2987,6 +3098,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                     deliveryTrackingId: PrimeExpressDeliveryGroup.createDeliveryCall.swftboxID(
                                                                                       (_model.apiResultShippingCreate?.jsonBody ?? ''),
                                                                                     ),
+                                                                                    deliveryType: selectedShipmentType,
                                                                                   ),
                                                                                   deliveryRecordReference);
                                                                               _shouldSetState = true;
@@ -3004,15 +3116,21 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
 
                                                                               await widget.orderRef!.update({
                                                                                 ...mapToFirestore(
-                                                                                  {
+                                                                                  <String, dynamic>{
+                                                                                    'updated_at': getCurrentTimestamp,
+                                                                                    'ready_shipping_request_status': selectedShipmentType == 'ready' ? 'REQUESTED' : null,
+                                                                                    'custom_shipping_request_status': selectedShipmentType == 'custom' ? 'REQUESTED' : null,
                                                                                     'delivery_info_list': FieldValue.arrayUnion([
                                                                                       getDeliveryInfoFirestoreData(
                                                                                         createDeliveryInfoStruct(
                                                                                           deliveryId: _model.deliveryDoc?.deliveryId,
                                                                                           createdAt: getCurrentTimestamp,
                                                                                           updatedAt: getCurrentTimestamp,
+                                                                                          status: 'REQUESTED',
+                                                                                          deliveryType: selectedShipmentType,
                                                                                           deliveryRef: _model.deliveryDoc?.reference,
                                                                                           deliveryTrackingId: _model.deliveryDoc?.deliveryTrackingId,
+                                                                                          preferedDate: readyPreferedDate,
                                                                                           fieldValues: {
                                                                                             'product_ids': _model.productIds,
                                                                                           },
@@ -3021,9 +3139,19 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                         true,
                                                                                       )
                                                                                     ]),
-                                                                                  },
+                                                                                  }.withoutNulls,
                                                                                 ),
                                                                               });
+                                                                              if (selectedShipmentType == 'ready' &&
+                                                                                  widget.orderRef != null) {
+                                                                                unawaited(
+                                                                                  WarehouseStockReservation.release(
+                                                                                    orderId: widget.orderRef!.id,
+                                                                                    reason: 'shipped',
+                                                                                    productIds: List<String>.from(_model.productIds),
+                                                                                  ).catchError((_) => <String, dynamic>{}),
+                                                                                );
+                                                                              }
                                                                               ScaffoldMessenger.of(context).showSnackBar(
                                                                                 SnackBar(
                                                                                   content: Text(
@@ -3173,6 +3301,35 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                 ..weight = double.tryParse(_model.totalWeightTextController.text)
                                                                                 ..weightUnit = 'gm',
                                                                             );
+                                                                            final customClientOrderId = functions.clientOrderIdForShipment(
+                                                                              ordersOrdersRecord.orderId,
+                                                                              'custom',
+                                                                            );
+                                                                            if (functions.storeValleyDeliveryAlreadyOpen(ordersOrdersRecord.customShippingRequestStatus)) {
+                                                                              await showDialog(
+                                                                                context: context,
+                                                                                builder: (alertDialogContext) {
+                                                                                  return WebViewAware(
+                                                                                    child: AlertDialog(
+                                                                                      content: Text(FFLocalizations.of(context).getVariableText(
+                                                                                        enText: 'Pickup was already requested automatically.',
+                                                                                        arText: 'تم طلب الاستلام تلقائياً.',
+                                                                                      )),
+                                                                                      actions: [
+                                                                                        TextButton(
+                                                                                          onPressed: () => Navigator.pop(alertDialogContext),
+                                                                                          child: Text(FFLocalizations.of(context).getVariableText(
+                                                                                            enText: 'Ok',
+                                                                                            arText: 'نعم',
+                                                                                          )),
+                                                                                        ),
+                                                                                      ],
+                                                                                    ),
+                                                                                  );
+                                                                                },
+                                                                              );
+                                                                              return;
+                                                                            }
                                                                             _model.idmapResultpickup =
                                                                                 await queryIdMapRecordOnce(
                                                                               queryBuilder: (idMapRecord) => idMapRecord.where(
@@ -3239,37 +3396,47 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                 await PrimeExpressDeliveryGroup.createDeliveryCall.call(
                                                                               env: _model.settingsDocPickup?.settingsLogisticsInfo.environment == 'test' ? 'test' : 'prod',
                                                                               orderID: _model.idmapResultpickup?.deliveryId.toString(),
-                                                                              invtrackID: ordersOrdersRecord.orderId,
+                                                                              invtrackID: customClientOrderId,
                                                                               fromName: columnUsersRecord.designerMainInfo.designerPickupAddress.shippingName,
                                                                               fromPhone: columnUsersRecord.designerMainInfo.designerPickupAddress.shippingPhone,
                                                                               fromAddress: columnUsersRecord.designerMainInfo.designerPickupAddress.addressLine1,
                                                                               fromCity: columnUsersRecord.designerMainInfo.designerPickupAddress.city,
                                                                               fromCountry: columnUsersRecord.designerMainInfo.designerPickupAddress.country,
+                                                                              fromBuilding: columnUsersRecord.designerMainInfo.designerPickupAddress.building,
+                                                                              fromBlock: columnUsersRecord.designerMainInfo.designerPickupAddress.block,
+                                                                              fromGovernorate: columnUsersRecord.designerMainInfo.designerPickupAddress.state,
                                                                               fromlatitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).firstOrNull,
                                                                               fromlongitude: functions.getlatlong(columnUsersRecord.designerMainInfo.designerPickupAddress.latLong!).lastOrNull,
-                                                                              toName: containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.shippingName,
-                                                                              toPhone: containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.shippingPhone,
-                                                                              toAddress: containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.addressLine1,
-                                                                              toCity: containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.city,
-                                                                              toCountry: containerSettingsRecord?.settingsCompanyInfo.wearhouseAddress.country,
-                                                                              tolatitude: functions.getlatlong(containerSettingsRecord!.settingsCompanyInfo.wearhouseAddress.latLong!).firstOrNull,
-                                                                              tolongitude: functions.getlatlong(containerSettingsRecord.settingsCompanyInfo.wearhouseAddress.latLong!).lastOrNull,
+                                                                              toName: ordersOrdersRecord.shippingAddress.shippingName,
+                                                                              toPhone: ordersOrdersRecord.shippingAddress.shippingPhone,
+                                                                              toAddress: ordersOrdersRecord.shippingAddress.addressLine1,
+                                                                              toCity: ordersOrdersRecord.shippingAddress.city,
+                                                                              toCountry: ordersOrdersRecord.shippingAddress.country,
+                                                                              toBuilding: ordersOrdersRecord.shippingAddress.building,
+                                                                              toBlock: ordersOrdersRecord.shippingAddress.block,
+                                                                              toGovernorate: ordersOrdersRecord.shippingAddress.state,
+                                                                              tolatitude: functions.getlatlong(ordersOrdersRecord.shippingAddress.latLong!).firstOrNull,
+                                                                              tolongitude: functions.getlatlong(ordersOrdersRecord.shippingAddress.latLong!).lastOrNull,
                                                                               packageCount: valueOrDefault<int>(
                                                                                 int.tryParse(_model.packageCountTextController.text),
                                                                                 1,
                                                                               ),
                                                                               url: isWeb ? 'https://proxy.vizsoft.in/https://backend.vizsoft.in/' : 'https://backend.vizsoft.in/',
                                                                               amount: 0.00,
-                                                                              otpOnDelivery: false,
-                                                                              b2bHandling: true,
+                                                                              otpOnDelivery: true,
+                                                                              b2bHandling: false,
                                                                               oversized: false,
                                                                               returnStatus: false,
                                                                               itemsListJson: FFAppState().item.toMap(),
                                                                               key: _model.settingsDocPickup?.settingsLogisticsInfo.environment == 'test' ? _model.settingsDocPickup?.settingsLogisticsInfo.testKey : _model.settingsDocPickup?.settingsLogisticsInfo.prodKey,
                                                                               deliveryInstructions: _model.textController1.text,
-                                                                              toEmail: containerSettingsRecord.settingsCompanyInfo.wearhouseAddress.shippingEmail,
+                                                                              toEmail: ordersOrdersRecord.shippingAddress.shippingEmail,
                                                                               fromCountryCode: 'KW',
                                                                               toCountryCode: 'KW',
+                                                                              designerId: columnUsersRecord.designerMainInfo.designerId,
+                                                                              customerUserId: ordersOrdersRecord.customerId,
+                                                                              orderKind: 'custom_made',
+                                                                              pickupPurpose: 'custom_made_fulfillment',
                                                                             );
 
                                                                             _shouldSetState =
@@ -3280,7 +3447,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                               await deliveryRecordReference.set(createDeliveryRecordData(
                                                                                 createdAt: getCurrentTimestamp,
                                                                                 updatedAt: getCurrentTimestamp,
-                                                                                type: 'orderPickup',
+                                                                                type: 'order',
                                                                                 status: 'REQUESTED',
                                                                                 orderRef: widget.orderRef,
                                                                                 assignedBy: currentUserReference,
@@ -3288,12 +3455,13 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                 deliveryTrackingId: PrimeExpressDeliveryGroup.createDeliveryCall.swftboxID(
                                                                                   (_model.apiResultShippingCreatepickup?.jsonBody ?? ''),
                                                                                 ),
+                                                                                deliveryType: 'custom',
                                                                               ));
                                                                               _model.deliveryDocPickup = DeliveryRecord.getDocumentFromData(
                                                                                   createDeliveryRecordData(
                                                                                     createdAt: getCurrentTimestamp,
                                                                                     updatedAt: getCurrentTimestamp,
-                                                                                    type: 'orderPickup',
+                                                                                    type: 'order',
                                                                                     status: 'REQUESTED',
                                                                                     orderRef: widget.orderRef,
                                                                                     assignedBy: currentUserReference,
@@ -3301,6 +3469,7 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                                     deliveryTrackingId: PrimeExpressDeliveryGroup.createDeliveryCall.swftboxID(
                                                                                       (_model.apiResultShippingCreatepickup?.jsonBody ?? ''),
                                                                                     ),
+                                                                                    deliveryType: 'custom',
                                                                                   ),
                                                                                   deliveryRecordReference);
                                                                               _shouldSetState = true;
@@ -3326,16 +3495,43 @@ class _CreateShippingLabelWidgetState extends State<CreateShippingLabelWidget> {
                                                                               );
                                                                               safeSetState(() {});
 
-                                                                              await widget.orderRef!.update(createOrdersRecordData(
-                                                                                orderItems: createUserCartStruct(
-                                                                                  fieldValues: {
-                                                                                    'cart_items': getUserCartItemsListFirestoreData(
-                                                                                      FFAppState().orderCartItems,
-                                                                                    ),
-                                                                                  },
-                                                                                  clearUnsetFields: false,
+                                                                              await widget.orderRef!.update({
+                                                                                ...createOrdersRecordData(
+                                                                                  orderItems: createUserCartStruct(
+                                                                                    fieldValues: {
+                                                                                      'cart_items': getUserCartItemsListFirestoreData(
+                                                                                        FFAppState().orderCartItems,
+                                                                                      ),
+                                                                                    },
+                                                                                    clearUnsetFields: false,
+                                                                                  ),
                                                                                 ),
-                                                                              ));
+                                                                                ...mapToFirestore(
+                                                                                  <String, dynamic>{
+                                                                                    'custom_shipping_request_status': 'REQUESTED',
+                                                                                    'delivery_info_list': FieldValue.arrayUnion([
+                                                                                      getDeliveryInfoFirestoreData(
+                                                                                        createDeliveryInfoStruct(
+                                                                                          deliveryId: _model.deliveryDocPickup?.deliveryId,
+                                                                                          createdAt: getCurrentTimestamp,
+                                                                                          updatedAt: getCurrentTimestamp,
+                                                                                          status: 'REQUESTED',
+                                                                                          deliveryType: 'custom',
+                                                                                          deliveryRef: _model.deliveryDocPickup?.reference,
+                                                                                          deliveryTrackingId: _model.deliveryDocPickup?.deliveryTrackingId,
+                                                                                          fieldValues: {
+                                                                                            'product_ids': [
+                                                                                              FFAppState().deliveryflow.selectedItemss.firstOrNull?.productId ?? '',
+                                                                                            ],
+                                                                                          },
+                                                                                          clearUnsetFields: false,
+                                                                                        ),
+                                                                                        true,
+                                                                                      )
+                                                                                    ]),
+                                                                                  }.withoutNulls,
+                                                                                ),
+                                                                              });
                                                                               ScaffoldMessenger.of(context).showSnackBar(
                                                                                 SnackBar(
                                                                                   content: Text(

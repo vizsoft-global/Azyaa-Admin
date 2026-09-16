@@ -10,6 +10,8 @@ class RequestPopupOptionModel
   bool mouseRegionHovered1 = false;
   // State field(s) for MouseRegion widget.
   bool mouseRegionHovered2 = false;
+  bool mouseRegionHovered3 = false;
+  bool mouseRegionHovered4 = false;
 
   @override
   void initState(BuildContext context) {}

@@ -101,7 +101,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
 
     _model.regionFocusNode ??= FocusNode();
 
-    _model.postalCodeFocusNode ??= FocusNode();
+    _model.buildingFocusNode ??= FocusNode();
+
+    _model.blockFocusNode ??= FocusNode();
 
     _model.productionKeyFocusNode ??= FocusNode();
 
@@ -3471,6 +3473,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                         '_model.nameTextController',
                                                                                         Duration(milliseconds: 2000),
                                                                                         () async {
+                                                                                          if (_model.nameTextController.text.trim().isEmpty) {
+                                                                                            return;
+                                                                                          }
                                                                                           await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
                                                                                             settingsCompanyInfo: createSettingsCompanyInfoStruct(
                                                                                               wearhouseAddress: createUserShippingaddressInfoStruct(
@@ -3607,6 +3612,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                         '_model.titleTextController8',
                                                                                         Duration(milliseconds: 2000),
                                                                                         () async {
+                                                                                          if (_model.titleTextController8.text.trim().isEmpty) {
+                                                                                            return;
+                                                                                          }
                                                                                           await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
                                                                                             settingsCompanyInfo: createSettingsCompanyInfoStruct(
                                                                                               wearhouseAddress: createUserShippingaddressInfoStruct(
@@ -3757,6 +3765,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                         '_model.addressTextController',
                                                                                         Duration(milliseconds: 2000),
                                                                                         () async {
+                                                                                          if (_model.addressTextController.text.trim().isEmpty) {
+                                                                                            return;
+                                                                                          }
                                                                                           await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
                                                                                             settingsCompanyInfo: createSettingsCompanyInfoStruct(
                                                                                               wearhouseAddress: createUserShippingaddressInfoStruct(
@@ -3883,6 +3894,9 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                         '_model.cityTextController',
                                                                                         Duration(milliseconds: 2000),
                                                                                         () async {
+                                                                                          if (_model.cityTextController.text.trim().isEmpty) {
+                                                                                            return;
+                                                                                          }
                                                                                           await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
                                                                                             settingsCompanyInfo: createSettingsCompanyInfoStruct(
                                                                                               wearhouseAddress: createUserShippingaddressInfoStruct(
@@ -4257,7 +4271,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                   children: [
                                                                                     Text(
                                                                                       FFLocalizations.of(context).getText(
-                                                                                        'ue4lp2du' /* Postal Code */,
+                                                                                        'ue4lp2du' /* Building */,
                                                                                       ),
                                                                                       style: FlutterFlowTheme.of(context).bodySmall.override(
                                                                                             font: GoogleFonts.inter(
@@ -4275,18 +4289,18 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                           ),
                                                                                     ),
                                                                                     TextFormField(
-                                                                                      controller: _model.postalCodeTextController ??= TextEditingController(
-                                                                                        text: userInfoSettingsRecord?.settingsCompanyInfo.wearhouseAddress.postalCode,
+                                                                                      controller: _model.buildingTextController ??= TextEditingController(
+                                                                                        text: userInfoSettingsRecord?.settingsCompanyInfo.wearhouseAddress.building,
                                                                                       ),
-                                                                                      focusNode: _model.postalCodeFocusNode,
+                                                                                      focusNode: _model.buildingFocusNode,
                                                                                       onChanged: (_) => EasyDebounce.debounce(
-                                                                                        '_model.postalCodeTextController',
+                                                                                        '_model.buildingTextController',
                                                                                         Duration(milliseconds: 2000),
                                                                                         () async {
                                                                                           await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
                                                                                             settingsCompanyInfo: createSettingsCompanyInfoStruct(
                                                                                               wearhouseAddress: createUserShippingaddressInfoStruct(
-                                                                                                postalCode: _model.postalCodeTextController.text,
+                                                                                                building: _model.buildingTextController.text,
                                                                                                 clearUnsetFields: false,
                                                                                               ),
                                                                                               clearUnsetFields: false,
@@ -4309,7 +4323,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                               fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
                                                                                             ),
                                                                                         hintText: FFLocalizations.of(context).getText(
-                                                                                          'mp6hwge4' /* PostalCode */,
+                                                                                          'mp6hwge4' /* Building */,
                                                                                         ),
                                                                                         hintStyle: FlutterFlowTheme.of(context).labelMedium.override(
                                                                                               font: GoogleFonts.inter(
@@ -4371,7 +4385,7 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                         FFAppState().theme.themeMain.primary,
                                                                                         FlutterFlowTheme.of(context).secondaryText,
                                                                                       ),
-                                                                                      validator: _model.postalCodeTextControllerValidator.asValidator(context),
+                                                                                      validator: _model.buildingTextControllerValidator.asValidator(context),
                                                                                     ),
                                                                                   ].divide(SizedBox(height: 8.0)),
                                                                                 ),
@@ -4466,6 +4480,128 @@ class _SettingsWidgetState extends State<SettingsWidget> {
                                                                                 ),
                                                                               ),
                                                                             ].divide(SizedBox(width: 16.0)),
+                                                                          ),
+                                                                        ),
+                                                                        Padding(
+                                                                          padding: EdgeInsetsDirectional.fromSTEB(
+                                                                              0.0,
+                                                                              0.0,
+                                                                              0.0,
+                                                                              16.0),
+                                                                          child: Row(
+                                                                            mainAxisSize: MainAxisSize.max,
+                                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                                            children: [
+                                                                              Expanded(
+                                                                                child: Column(
+                                                                                  mainAxisSize: MainAxisSize.max,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                  children: [
+                                                                                    Text(
+                                                                                      FFLocalizations.of(context).getText(
+                                                                                        'svaddrblk' /* Block */,
+                                                                                      ),
+                                                                                      style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FontWeight.w500,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                            ),
+                                                                                            color: valueOrDefault<Color>(
+                                                                                              FFAppState().theme.themeMain.primaryText,
+                                                                                              FlutterFlowTheme.of(context).primaryText,
+                                                                                            ),
+                                                                                            fontSize: 13.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                            fontWeight: FontWeight.w500,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                          ),
+                                                                                    ),
+                                                                                    TextFormField(
+                                                                                      controller: _model.blockTextController ??= TextEditingController(
+                                                                                        text: userInfoSettingsRecord?.settingsCompanyInfo.wearhouseAddress.block,
+                                                                                      ),
+                                                                                      focusNode: _model.blockFocusNode,
+                                                                                      onChanged: (_) => EasyDebounce.debounce(
+                                                                                        '_model.blockTextController',
+                                                                                        Duration(milliseconds: 2000),
+                                                                                        () async {
+                                                                                          await userInfoSettingsRecord!.reference.update(createSettingsRecordData(
+                                                                                            settingsCompanyInfo: createSettingsCompanyInfoStruct(
+                                                                                              wearhouseAddress: createUserShippingaddressInfoStruct(
+                                                                                                block: _model.blockTextController.text,
+                                                                                                clearUnsetFields: false,
+                                                                                              ),
+                                                                                              clearUnsetFields: false,
+                                                                                            ),
+                                                                                          ));
+                                                                                        },
+                                                                                      ),
+                                                                                      autofocus: false,
+                                                                                      textInputAction: TextInputAction.next,
+                                                                                      obscureText: false,
+                                                                                      decoration: InputDecoration(
+                                                                                        isDense: true,
+                                                                                        hintText: FFLocalizations.of(context).getText(
+                                                                                          'svaddrblkh' /* Enter block */,
+                                                                                        ),
+                                                                                        hintStyle: FlutterFlowTheme.of(context).labelMedium.override(
+                                                                                              font: GoogleFonts.inter(
+                                                                                                fontWeight: FlutterFlowTheme.of(context).labelMedium.fontWeight,
+                                                                                                fontStyle: FlutterFlowTheme.of(context).labelMedium.fontStyle,
+                                                                                              ),
+                                                                                              fontSize: 13.0,
+                                                                                              letterSpacing: 0.0,
+                                                                                            ),
+                                                                                        enabledBorder: OutlineInputBorder(
+                                                                                          borderSide: BorderSide(
+                                                                                            color: FlutterFlowTheme.of(context).secondaryText,
+                                                                                            width: 1.0,
+                                                                                          ),
+                                                                                          borderRadius: BorderRadius.circular(8.0),
+                                                                                        ),
+                                                                                        focusedBorder: OutlineInputBorder(
+                                                                                          borderSide: BorderSide(
+                                                                                            color: FlutterFlowTheme.of(context).primary,
+                                                                                            width: 1.0,
+                                                                                          ),
+                                                                                          borderRadius: BorderRadius.circular(8.0),
+                                                                                        ),
+                                                                                        errorBorder: OutlineInputBorder(
+                                                                                          borderSide: BorderSide(
+                                                                                            color: FlutterFlowTheme.of(context).error,
+                                                                                            width: 1.0,
+                                                                                          ),
+                                                                                          borderRadius: BorderRadius.circular(8.0),
+                                                                                        ),
+                                                                                        focusedErrorBorder: OutlineInputBorder(
+                                                                                          borderSide: BorderSide(
+                                                                                            color: FlutterFlowTheme.of(context).error,
+                                                                                            width: 1.0,
+                                                                                          ),
+                                                                                          borderRadius: BorderRadius.circular(8.0),
+                                                                                        ),
+                                                                                        filled: true,
+                                                                                        fillColor: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                        contentPadding: EdgeInsets.all(13.0),
+                                                                                      ),
+                                                                                      style: FlutterFlowTheme.of(context).bodyMedium.override(
+                                                                                            font: GoogleFonts.inter(
+                                                                                              fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                            ),
+                                                                                            color: valueOrDefault<Color>(
+                                                                                              FFAppState().theme.themeMain.primaryText,
+                                                                                              FlutterFlowTheme.of(context).primaryText,
+                                                                                            ),
+                                                                                            fontSize: 13.0,
+                                                                                            letterSpacing: 0.0,
+                                                                                          ),
+                                                                                      validator: _model.blockTextControllerValidator.asValidator(context),
+                                                                                    ),
+                                                                                  ].divide(SizedBox(height: 8.0)),
+                                                                                ),
+                                                                              ),
+                                                                            ],
                                                                           ),
                                                                         ),
                                                                       ],

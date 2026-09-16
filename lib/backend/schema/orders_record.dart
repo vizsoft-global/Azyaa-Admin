@@ -135,6 +135,11 @@ class OrdersRecord extends FirestoreRecord {
   String get customShippingRequestStatus => _customShippingRequestStatus ?? '';
   bool hasCustomShippingRequestStatus() => _customShippingRequestStatus != null;
 
+  // "inventory_reservation_status" field.
+  String? _inventoryReservationStatus;
+  String get inventoryReservationStatus => _inventoryReservationStatus ?? '';
+  bool hasInventoryReservationStatus() => _inventoryReservationStatus != null;
+
   void _initializeFields() {
     _orderId = snapshotData['order_id'] as String?;
     _customerId = snapshotData['customer_id'] as String?;
@@ -178,6 +183,8 @@ class OrdersRecord extends FirestoreRecord {
         snapshotData['ready_shipping_request_status'] as String?;
     _customShippingRequestStatus =
         snapshotData['custom_shipping_request_status'] as String?;
+    _inventoryReservationStatus =
+        snapshotData['inventory_reservation_status'] as String?;
   }
 
   static CollectionReference get collection =>
@@ -264,6 +271,8 @@ class OrdersRecord extends FirestoreRecord {
               snapshot.data['ready_shipping_request_status'],
           'custom_shipping_request_status':
               snapshot.data['custom_shipping_request_status'],
+          'inventory_reservation_status':
+              snapshot.data['inventory_reservation_status'],
         },
         OrdersRecord.collection.doc(snapshot.objectID),
       );
@@ -322,6 +331,7 @@ Map<String, dynamic> createOrdersRecordData({
   String? paymentComment,
   String? readyShippingRequestStatus,
   String? customShippingRequestStatus,
+  String? inventoryReservationStatus,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -347,6 +357,7 @@ Map<String, dynamic> createOrdersRecordData({
       'payment_comment': paymentComment,
       'ready_shipping_request_status': readyShippingRequestStatus,
       'custom_shipping_request_status': customShippingRequestStatus,
+      'inventory_reservation_status': inventoryReservationStatus,
     }.withoutNulls,
   );
 
@@ -401,7 +412,8 @@ class OrdersRecordDocumentEquality implements Equality<OrdersRecord> {
         listEquality.equals(e1?.deliveryInfoList, e2?.deliveryInfoList) &&
         e1?.paymentComment == e2?.paymentComment &&
         e1?.readyShippingRequestStatus == e2?.readyShippingRequestStatus &&
-        e1?.customShippingRequestStatus == e2?.customShippingRequestStatus;
+        e1?.customShippingRequestStatus == e2?.customShippingRequestStatus &&
+        e1?.inventoryReservationStatus == e2?.inventoryReservationStatus;
   }
 
   @override
@@ -428,7 +440,8 @@ class OrdersRecordDocumentEquality implements Equality<OrdersRecord> {
         e?.deliveryInfoList,
         e?.paymentComment,
         e?.readyShippingRequestStatus,
-        e?.customShippingRequestStatus
+        e?.customShippingRequestStatus,
+        e?.inventoryReservationStatus
       ]);
 
   @override

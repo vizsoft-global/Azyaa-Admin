@@ -1,4 +1,5 @@
 import '/backend/backend.dart';
+import '/backend/store_valley/restock_request_origin.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/flutter_flow/flutter_flow_widgets.dart';
@@ -1509,6 +1510,7 @@ class _RestockRequestCopyWidgetState extends State<RestockRequestCopyWidget> {
                                       'INVRSQ${_model.idmapresult?.inventoryRequestId.toString()}',
                                   requestStatus: 'Pending',
                                   requestType: 'Restock',
+                                  raisedBy: RestockRequestOrigin.admin,
                                   adminPreferredDate: _model.datePicked,
                                   adminNotes: _model.notesTextController.text,
                                   clearUnsetFields: false,
@@ -1538,6 +1540,7 @@ class _RestockRequestCopyWidgetState extends State<RestockRequestCopyWidget> {
                                               'INVRSQ${_model.idmapresult?.inventoryRequestId.toString()}',
                                           requestStatus: 'Pending',
                                           requestType: 'Restock',
+                                          raisedBy: RestockRequestOrigin.admin,
                                           adminPreferredDate: _model.datePicked,
                                           adminNotes:
                                               _model.notesTextController.text,

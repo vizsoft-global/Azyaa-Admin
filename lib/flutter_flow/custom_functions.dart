@@ -12,6 +12,7 @@ import '/backend/backend.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '/backend/schema/structs/index.dart';
 import '/auth/firebase_auth/auth_util.dart';
+import '/backend/store_valley/store_valley_delivery_status.dart' as svDelivery;
 
 List<int> addTwoArrayInteger(
   List<int> var1,
@@ -1790,4 +1791,58 @@ DateTime addHours(
   int hoursToAdd,
 ) {
   return inputDate.add(Duration(hours: hoursToAdd));
+}
+
+String shipmentTypeForCartItem(UserCartItemsStruct item) {
+  return item.productMainType == 'ready' ? 'ready' : 'custom';
+}
+
+bool canSelectCartItemForDelivery(
+  UserCartItemsStruct item,
+  List<UserCartItemsStruct> selected,
+) {
+  if (selected.isEmpty) {
+    return true;
+  }
+  return shipmentTypeForCartItem(selected.first) ==
+      shipmentTypeForCartItem(item);
+}
+
+String storeValleyOrderKindFromShipmentType(String shipmentType) {
+  return shipmentType == 'custom' ? 'custom_made' : 'ready_made';
+}
+
+String clientOrderIdForShipment(
+  String orderId,
+  String shipmentType,
+) {
+  final suffix = shipmentType == 'custom' ? '-CM' : '-RM';
+  return '$orderId$suffix';
+}
+
+DateTime nextDayPreferedDate(DateTime now) {
+  return now.add(const Duration(days: 1));
+}
+
+List<DeliveryInfoStruct> customerDeliveriesOfType(
+  List<DeliveryInfoStruct> deliveryInfoList,
+  String deliveryType,
+) {
+  return deliveryInfoList
+      .where((delivery) =>
+          delivery.deliveryType == deliveryType &&
+          delivery.status.trim().toUpperCase() != 'CANCELLED')
+      .toList();
+}
+
+bool storeValleyDeliveryAlreadyOpen(String status) {
+  return svDelivery.storeValleyDeliveryAlreadyOpen(status);
+}
+
+String warehouseDeliveryBadgeLabel(String status) {
+  return svDelivery.warehouseDeliveryBadgeLabel(status);
+}
+
+String customDeliveryBadgeLabel(String status) {
+  return svDelivery.customDeliveryBadgeLabel(status);
 }

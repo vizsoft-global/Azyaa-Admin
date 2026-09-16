@@ -1,4 +1,3 @@
-import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
 import '/components/theme_status_checker_widget.dart';
 import '/flutter_flow/flutter_flow_choice_chips.dart';
@@ -14,6 +13,8 @@ import '/phase1/component/azyaa_sidebar/azyaa_sidebar_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
 import '/phase1/order/return/reject_return/reject_return_widget.dart';
+import '/backend/store_valley/shopper_return_flow.dart';
+import '/backend/store_valley/shopper_return_payload.dart';
 import '/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -1358,18 +1359,42 @@ class _ReturnOrdersWidgetState extends State<ReturnOrdersWidget> {
                                                                               [
                                                                             FFButtonWidget(
                                                                               onPressed: () async {
-                                                                                await returnOrderListItem.reference.update(createReturnRequestsRecordData(
-                                                                                  updatedAt: getCurrentTimestamp,
-                                                                                  approverInfo: createApproverInfoStruct(
-                                                                                    userEmail: currentUserEmail,
-                                                                                    userRef: currentUserReference,
-                                                                                    uid: currentUserUid,
-                                                                                    userName: currentUserDisplayName,
-                                                                                    userRole: valueOrDefault(currentUserDocument?.userRole, ''),
-                                                                                    clearUnsetFields: false,
-                                                                                  ),
-                                                                                  status: 'Accepted',
-                                                                                ));
+                                                                                final result =
+                                                                                    await createShopperReturnPickup(
+                                                                                  returnOrderListItem,
+                                                                                );
+                                                                                await showDialog(
+                                                                                  context:
+                                                                                      context,
+                                                                                  builder:
+                                                                                      (alertDialogContext) {
+                                                                                    return WebViewAware(
+                                                                                      child:
+                                                                                          AlertDialog(
+                                                                                        content:
+                                                                                            Text(
+                                                                                          shopperReturnApproveMessage(
+                                                                                            succeeded:
+                                                                                                result.succeeded,
+                                                                                            message:
+                                                                                                result.message,
+                                                                                            pickupOtp:
+                                                                                                result.pickupOtp,
+                                                                                          ),
+                                                                                        ),
+                                                                                        actions: [
+                                                                                          TextButton(
+                                                                                            onPressed: () =>
+                                                                                                Navigator.pop(
+                                                                                                    alertDialogContext),
+                                                                                            child:
+                                                                                                Text('Ok'),
+                                                                                          ),
+                                                                                        ],
+                                                                                      ),
+                                                                                    );
+                                                                                  },
+                                                                                );
                                                                               },
                                                                               text: FFLocalizations.of(context).getText(
                                                                                 'u2s7rpjb' /* Approve */,

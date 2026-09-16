@@ -163,6 +163,8 @@ dependencies:
   url_launcher_web: 2.4.1
   url_launcher_windows: 3.1.4
   uuid: ^4.0.0
+  store_valley_sdk:
+    path: store_valley_websitek_integration_v1.1.0-rc.5/sdk/store_valley_sdk
   vdocipher_flutter: ^2.7.4
   video_player: 2.10.0
   video_player_android: 2.8.7
