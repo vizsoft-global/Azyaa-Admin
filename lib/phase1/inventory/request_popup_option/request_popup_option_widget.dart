@@ -1,4 +1,6 @@
 import '/backend/backend.dart';
+import '/backend/store_valley/designer_return_flow.dart';
+import '/backend/store_valley/inventory_request_type.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
 import '/phase1/inventory/restock_request_edit/restock_request_edit_widget.dart';
@@ -175,6 +177,158 @@ class _RequestPopupOptionWidgetState extends State<RequestPopupOptionWidget> {
                 safeSetState(() => _model.mouseRegionHovered1 = false);
               }),
             ),
+            if (InventoryRequestType.needsSuperadminApprove(
+                    widget.invMovementDoc?.requestInfo.requestType ?? '') &&
+                (widget.invMovementDoc?.requestInfo.requestStatus ==
+                    'Pending'))
+              MouseRegion(
+                opaque: false,
+                cursor: MouseCursor.defer,
+                child: InkWell(
+                  splashColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  onTap: () async {
+                    final log = widget.invMovementDoc!;
+                    if (InventoryRequestType.isReturnToDesigner(
+                        log.requestInfo.requestType)) {
+                      final result = await createDesignerReturnDelivery(log);
+                      if (!result.succeeded) {
+                        await showDialog(
+                          context: context,
+                          builder: (alertDialogContext) {
+                            return WebViewAware(
+                              child: AlertDialog(
+                                content: Text(result.message),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(alertDialogContext),
+                                    child: Text('Ok'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        );
+                        return;
+                      }
+                      Navigator.pop(context);
+                      return;
+                    }
+                    await log.reference.update(
+                      createInventorymovementlogRecordData(
+                        updateAt: getCurrentTimestamp,
+                        requestInfo: createInventoryRequestInfoStruct(
+                          requestStatus: 'Accepted',
+                          fulfillStatus: 'Processing',
+                          clearUnsetFields: false,
+                        ),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    width: MediaQuery.sizeOf(context).width * 1.0,
+                    decoration: BoxDecoration(
+                      color: _model.mouseRegionHovered3
+                          ? FlutterFlowTheme.of(context).primaryBackground
+                          : FlutterFlowTheme.of(context).secondaryBackground,
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    alignment: AlignmentDirectional(0.0, 0.0),
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Approve',
+                        style: FlutterFlowTheme.of(context).bodySmall.override(
+                              font: GoogleFonts.inter(
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FlutterFlowTheme.of(context)
+                                    .bodySmall
+                                    .fontStyle,
+                              ),
+                              color: FlutterFlowTheme.of(context).primary,
+                              letterSpacing: 0.0,
+                              fontWeight: FontWeight.w500,
+                              fontStyle: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .fontStyle,
+                            ),
+                      ),
+                    ),
+                  ),
+                ),
+                onEnter: ((event) async {
+                  safeSetState(() => _model.mouseRegionHovered3 = true);
+                }),
+                onExit: ((event) async {
+                  safeSetState(() => _model.mouseRegionHovered3 = false);
+                }),
+              ),
+            if (InventoryRequestType.needsSuperadminApprove(
+                    widget.invMovementDoc?.requestInfo.requestType ?? '') &&
+                (widget.invMovementDoc?.requestInfo.requestStatus ==
+                    'Pending'))
+              MouseRegion(
+                opaque: false,
+                cursor: MouseCursor.defer,
+                child: InkWell(
+                  splashColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  onTap: () async {
+                    await widget.invMovementDoc!.reference.update(
+                      createInventorymovementlogRecordData(
+                        updateAt: getCurrentTimestamp,
+                        requestInfo: createInventoryRequestInfoStruct(
+                          requestStatus: 'Declined',
+                          clearUnsetFields: false,
+                        ),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  },
+                  child: Container(
+                    width: MediaQuery.sizeOf(context).width * 1.0,
+                    decoration: BoxDecoration(
+                      color: _model.mouseRegionHovered4
+                          ? FlutterFlowTheme.of(context).primaryBackground
+                          : FlutterFlowTheme.of(context).secondaryBackground,
+                      borderRadius: BorderRadius.circular(8.0),
+                    ),
+                    alignment: AlignmentDirectional(0.0, 0.0),
+                    child: Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Decline',
+                        style: FlutterFlowTheme.of(context).bodySmall.override(
+                              font: GoogleFonts.inter(
+                                fontWeight: FontWeight.w500,
+                                fontStyle: FlutterFlowTheme.of(context)
+                                    .bodySmall
+                                    .fontStyle,
+                              ),
+                              color: FlutterFlowTheme.of(context).error,
+                              letterSpacing: 0.0,
+                              fontWeight: FontWeight.w500,
+                              fontStyle: FlutterFlowTheme.of(context)
+                                  .bodySmall
+                                  .fontStyle,
+                            ),
+                      ),
+                    ),
+                  ),
+                ),
+                onEnter: ((event) async {
+                  safeSetState(() => _model.mouseRegionHovered4 = true);
+                }),
+                onExit: ((event) async {
+                  safeSetState(() => _model.mouseRegionHovered4 = false);
+                }),
+              ),
             MouseRegion(
               opaque: false,
               cursor: MouseCursor.defer ?? MouseCursor.defer,

@@ -120,22 +120,14 @@ class PickUpAddressEditModel extends FlutterFlowModel<PickUpAddressEditWidget> {
   String? Function(BuildContext, String?)? regionTextControllerValidator;
   String? _regionTextControllerValidator(BuildContext context, String? val) {
     if (val == null || val.isEmpty) {
-      return FFLocalizations.of(context).getText(
-        'e82pfs1l' /* Region is required. */,
-      );
-    }
-
-    if (val.length < 2) {
-      return FFLocalizations.of(context).getText(
-        'hotzbekc' /* Minimum 2 characters are requi... */,
-      );
+      return null;
     }
     if (val.length > 50) {
       return FFLocalizations.of(context).getText(
         'ogstumje' /* Maximum 50 characters are requ... */,
       );
     }
-    if (!RegExp('^[A-Za-z\\u0600-\\u06FF\\s\\-]{2,50}\$').hasMatch(val)) {
+    if (!RegExp('^[A-Za-z\\u0600-\\u06FF\\s\\-]{1,50}\$').hasMatch(val)) {
       return FFLocalizations.of(context).getText(
         '31lbz9hq' /* Invalid region format */,
       );
@@ -148,25 +140,14 @@ class PickUpAddressEditModel extends FlutterFlowModel<PickUpAddressEditWidget> {
   FormFieldController<String>? countryValueController;
   // Stores action output result for [Backend Call - API (CountryISO)] action in Country widget.
   ApiCallResponse? apiResultCtryISO;
-  // State field(s) for PostalCode widget.
-  FocusNode? postalCodeFocusNode;
-  TextEditingController? postalCodeTextController;
-  String? Function(BuildContext, String?)? postalCodeTextControllerValidator;
-  String? _postalCodeTextControllerValidator(
-      BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return FFLocalizations.of(context).getText(
-        '56rjsq5f' /* Postal code is required */,
-      );
-    }
-
-    if (!RegExp('^\\d{3,5}\$').hasMatch(val)) {
-      return FFLocalizations.of(context).getText(
-        'bgc7ub2f' /* Invalid input */,
-      );
-    }
-    return null;
-  }
+  // State field(s) for Building widget.
+  FocusNode? buildingFocusNode;
+  TextEditingController? buildingTextController;
+  String? Function(BuildContext, String?)? buildingTextControllerValidator;
+  // State field(s) for Block widget.
+  FocusNode? blockFocusNode;
+  TextEditingController? blockTextController;
+  String? Function(BuildContext, String?)? blockTextControllerValidator;
 
   // State field(s) for GoogleMap widget.
   LatLng? googleMapsCenter;
@@ -179,7 +160,6 @@ class PickUpAddressEditModel extends FlutterFlowModel<PickUpAddressEditWidget> {
     addressTextControllerValidator = _addressTextControllerValidator;
     cityTextControllerValidator = _cityTextControllerValidator;
     regionTextControllerValidator = _regionTextControllerValidator;
-    postalCodeTextControllerValidator = _postalCodeTextControllerValidator;
   }
 
   @override
@@ -199,7 +179,10 @@ class PickUpAddressEditModel extends FlutterFlowModel<PickUpAddressEditWidget> {
     regionFocusNode?.dispose();
     regionTextController?.dispose();
 
-    postalCodeFocusNode?.dispose();
-    postalCodeTextController?.dispose();
+    buildingFocusNode?.dispose();
+    buildingTextController?.dispose();
+
+    blockFocusNode?.dispose();
+    blockTextController?.dispose();
   }
 }

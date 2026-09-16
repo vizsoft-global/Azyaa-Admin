@@ -1,5 +1,8 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/backend.dart';
+import '/backend/store_valley/inventory_request_type.dart';
+import '/backend/store_valley/restock_request_origin.dart';
+import '/custom_code/widgets/warehouse_stock_cell.dart';
 import '/flutter_flow/flutter_flow_drop_down.dart';
 import '/flutter_flow/flutter_flow_theme.dart';
 import '/flutter_flow/flutter_flow_util.dart';
@@ -322,9 +325,10 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                                   .product
                                                   .inventoryRef!);
                                       _model.inhandStock =
-                                          _model.inventoryDoc?.stockOnHand;
+                                          _model.inventoryDoc?.stockOnHand ?? 0;
                                       _model.lowstock =
-                                          _model.inventoryDoc?.thresholdStock;
+                                          _model.inventoryDoc?.stockReserved ??
+                                              0;
                                       safeSetState(() {});
 
                                       safeSetState(() {});
@@ -549,8 +553,10 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                     width: 150.0,
                                     decoration: BoxDecoration(),
                                     child: Text(
-                                      FFLocalizations.of(context).getText(
-                                        'x5hvnb4u' /* In-hand Stock */,
+                                      FFLocalizations.of(context)
+                                          .getVariableText(
+                                        enText: 'Warehouse Current Stock',
+                                        arText: 'المخزون الحالي في المستودع',
                                       ),
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
@@ -582,34 +588,47 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                   ),
                                   Container(
                                     decoration: BoxDecoration(),
-                                    child: Text(
-                                      '${_model.inhandStock?.toString()} Units',
-                                      style: FlutterFlowTheme.of(context)
-                                          .bodyMedium
-                                          .override(
-                                            font: GoogleFonts.inter(
-                                              fontWeight: FontWeight.w500,
-                                              fontStyle:
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        WarehouseStockCell(
+                                          width: 48.0,
+                                          height: 20.0,
+                                          productId: _model.productID ?? '',
+                                          sku: _model.inventoryDoc?.productSku,
+                                          field: WarehouseStockField.stored,
+                                        ),
+                                        Text(
+                                          ' Units',
+                                          style: FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .override(
+                                                font: GoogleFonts.inter(
+                                                  fontWeight: FontWeight.w500,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .fontStyle,
+                                                ),
+                                                color: valueOrDefault<Color>(
+                                                  FFAppState()
+                                                      .theme
+                                                      .themeMain
+                                                      .secondaryText,
                                                   FlutterFlowTheme.of(context)
-                                                      .bodyMedium
-                                                      .fontStyle,
-                                            ),
-                                            color: valueOrDefault<Color>(
-                                              FFAppState()
-                                                  .theme
-                                                  .themeMain
-                                                  .secondaryText,
-                                              FlutterFlowTheme.of(context)
-                                                  .secondaryText,
-                                            ),
-                                            fontSize: 13.0,
-                                            letterSpacing: 0.0,
-                                            fontWeight: FontWeight.w500,
-                                            fontStyle:
-                                                FlutterFlowTheme.of(context)
-                                                    .bodyMedium
-                                                    .fontStyle,
-                                          ),
+                                                      .secondaryText,
+                                                ),
+                                                fontSize: 13.0,
+                                                letterSpacing: 0.0,
+                                                fontWeight: FontWeight.w500,
+                                                fontStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .fontStyle,
+                                              ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ].divide(SizedBox(width: 8.0)),
@@ -639,8 +658,10 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                     width: 150.0,
                                     decoration: BoxDecoration(),
                                     child: Text(
-                                      FFLocalizations.of(context).getText(
-                                        'fxxgfr0v' /* Low Stock Alert Threshold */,
+                                      FFLocalizations.of(context)
+                                          .getVariableText(
+                                        enText: 'Reserved Stocks',
+                                        arText: 'المخزون المحجوز',
                                       ),
                                       style: FlutterFlowTheme.of(context)
                                           .bodyMedium
@@ -757,37 +778,135 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                           ),
                                     ),
                                   ),
-                                  Text(
-                                    FFAppState().currentUserRoleKey ==
-                                            'designer'
-                                        ? 'Designer Return'
-                                        : 'Restock',
-                                    style: FlutterFlowTheme.of(context)
-                                        .bodyMedium
-                                        .override(
-                                          font: GoogleFonts.inter(
+                                  Expanded(
+                                    child: FlutterFlowDropDown<String>(
+                                      controller: _model
+                                              .requestTypeValueController ??=
+                                          FormFieldController<String>(
+                                        _model.requestTypeValue ??=
+                                            InventoryRequestType.restock,
+                                      ),
+                                      options: const [
+                                        InventoryRequestType.restock,
+                                        InventoryRequestType.returnToDesigner,
+                                      ],
+                                      optionLabels: [
+                                        FFLocalizations.of(context)
+                                            .getVariableText(
+                                          enText: 'Restock (warehouse-intake)',
+                                          arText: 'إعادة تخزين (المستودع)',
+                                        ),
+                                        FFLocalizations.of(context)
+                                            .getVariableText(
+                                          enText: 'Return to Designer',
+                                          arText: 'إرجاع للمصمم',
+                                        ),
+                                      ],
+                                      onChanged: (val) => safeSetState(
+                                          () => _model.requestTypeValue = val),
+                                      width: 280.0,
+                                      height: 36.0,
+                                      maxHeight: 120.0,
+                                      searchHintTextStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .labelMedium
+                                              .override(
+                                                font: GoogleFonts.inter(
+                                                  fontWeight:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .labelMedium
+                                                          .fontWeight,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .labelMedium
+                                                          .fontStyle,
+                                                ),
+                                                letterSpacing: 0.0,
+                                                fontWeight:
+                                                    FlutterFlowTheme.of(context)
+                                                        .labelMedium
+                                                        .fontWeight,
+                                                fontStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .labelMedium
+                                                        .fontStyle,
+                                              ),
+                                      searchTextStyle:
+                                          FlutterFlowTheme.of(context)
+                                              .bodyMedium
+                                              .override(
+                                                font: GoogleFonts.inter(
+                                                  fontWeight:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .fontWeight,
+                                                  fontStyle:
+                                                      FlutterFlowTheme.of(
+                                                              context)
+                                                          .bodyMedium
+                                                          .fontStyle,
+                                                ),
+                                                letterSpacing: 0.0,
+                                                fontWeight:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .fontWeight,
+                                                fontStyle:
+                                                    FlutterFlowTheme.of(context)
+                                                        .bodyMedium
+                                                        .fontStyle,
+                                              ),
+                                      textStyle: FlutterFlowTheme.of(context)
+                                          .bodyMedium
+                                          .override(
+                                            font: GoogleFonts.inter(
+                                              fontWeight: FontWeight.w500,
+                                              fontStyle:
+                                                  FlutterFlowTheme.of(context)
+                                                      .bodyMedium
+                                                      .fontStyle,
+                                            ),
+                                            color: valueOrDefault<Color>(
+                                              FFAppState()
+                                                  .theme
+                                                  .themeMain
+                                                  .secondaryText,
+                                              FlutterFlowTheme.of(context)
+                                                  .secondaryText,
+                                            ),
+                                            fontSize: 13.0,
+                                            letterSpacing: 0.0,
                                             fontWeight: FontWeight.w500,
                                             fontStyle:
                                                 FlutterFlowTheme.of(context)
                                                     .bodyMedium
                                                     .fontStyle,
                                           ),
-                                          color: valueOrDefault<Color>(
-                                            FFAppState()
-                                                .theme
-                                                .themeMain
-                                                .secondaryText,
-                                            FlutterFlowTheme.of(context)
-                                                .secondaryText,
-                                          ),
-                                          fontSize: 13.0,
-                                          letterSpacing: 0.0,
-                                          fontWeight: FontWeight.w500,
-                                          fontStyle:
-                                              FlutterFlowTheme.of(context)
-                                                  .bodyMedium
-                                                  .fontStyle,
-                                        ),
+                                      hintText: '',
+                                      searchHintText: '',
+                                      icon: Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: FlutterFlowTheme.of(context)
+                                            .secondaryText,
+                                        size: 16.0,
+                                      ),
+                                      fillColor: FlutterFlowTheme.of(context)
+                                          .secondaryBackground,
+                                      elevation: 2.0,
+                                      borderColor:
+                                          FlutterFlowTheme.of(context).border,
+                                      borderWidth: 1.0,
+                                      borderRadius: 8.0,
+                                      margin: EdgeInsetsDirectional.fromSTEB(
+                                          8.0, 0.0, 8.0, 0.0),
+                                      hidesUnderline: true,
+                                      isOverButton: false,
+                                      isSearchable: false,
+                                      isMultiSelect: false,
+                                    ),
                                   ),
                                 ].divide(SizedBox(width: 8.0)),
                               ),
@@ -1824,177 +1943,177 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                             if (_model.productDropdownValue == null) {
                               return;
                             }
-                            if (_model.datePicked == null) {
+                            final isDesigner =
+                                FFAppState().currentUserRoleKey == 'designer';
+                            if (!isDesigner && _model.datePicked == null) {
+                              await showDialog(
+                                context: context,
+                                builder: (alertDialogContext) {
+                                  return WebViewAware(
+                                    child: AlertDialog(
+                                      content: Text(
+                                          FFLocalizations.of(context)
+                                              .getVariableText(
+                                        enText:
+                                            'Please select Preferred ETA Date',
+                                        arText:
+                                            'الرجاء تحديد تاريخ الوصول المفضل',
+                                      )),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                              alertDialogContext),
+                                          child: Text('Ok'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
+                              return;
+                            }
+                            final requestType = _model.requestTypeValue ??
+                                InventoryRequestType.restock;
+                            final requestedQty = int.tryParse(
+                                    _model.quanityTextController.text) ??
+                                0;
+                            if (InventoryRequestType.isReturnToDesigner(
+                                    requestType) &&
+                                !InventoryRequestType.canReturnQty(
+                                  qty: requestedQty,
+                                  availableForOrder:
+                                      _model.inventoryDoc?.availableForOrder ??
+                                          0,
+                                )) {
+                              await showDialog(
+                                context: context,
+                                builder: (alertDialogContext) {
+                                  return WebViewAware(
+                                    child: AlertDialog(
+                                      content: Text(
+                                          FFLocalizations.of(context)
+                                              .getVariableText(
+                                        enText:
+                                            'Return quantity cannot exceed warehouse available for order',
+                                        arText:
+                                            'لا يمكن أن تتجاوز كمية الإرجاع المتاح للطلب في المستودع',
+                                      )),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(
+                                              alertDialogContext),
+                                          child: Text('Ok'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              );
                               return;
                             }
                             if ((_model.productID != null &&
                                     _model.productID != '') &&
                                 (_model.productRef != null)) {
-                              if (_model.datePicked != null) {
-                                _model.idmapresult = await queryIdMapRecordOnce(
-                                  queryBuilder: (idMapRecord) =>
-                                      idMapRecord.where(
-                                    'type',
-                                    isEqualTo: 'Main',
+                              _model.idmapresult = await queryIdMapRecordOnce(
+                                queryBuilder: (idMapRecord) =>
+                                    idMapRecord.where(
+                                  'type',
+                                  isEqualTo: 'Main',
+                                ),
+                                singleRecord: true,
+                              ).then((s) => s.firstOrNull);
+                              _shouldSetState = true;
+                              final selectedProduct =
+                                  containerProductsRecordList
+                                      .where((e) =>
+                                          e.reference == _model.productRef)
+                                      .toList()
+                                      .firstOrNull;
+                              final logRef =
+                                  InventorymovementlogRecord.collection.doc();
+                              await logRef.set(
+                                  createInventorymovementlogRecordData(
+                                    createdAt: getCurrentTimestamp,
+                                    updateAt: getCurrentTimestamp,
+                                    productId: _model.productID,
+                                    productRef: _model.productRef,
+                                    productQuantity: int.tryParse(
+                                        _model.quanityTextController.text),
+                                    requestInfo:
+                                        createInventoryRequestInfoStruct(
+                                      requestStatus: 'Pending',
+                                      adminPreferredDate: isDesigner
+                                          ? null
+                                          : _model.datePicked,
+                                      adminNotes: isDesigner
+                                          ? null
+                                          : _model.notesTextController.text,
+                                      designerNotes: isDesigner
+                                          ? _model.notesTextController.text
+                                          : null,
+                                      inventoryRequestId:
+                                          'INVNSQ${_model.idmapresult?.inventoryRequestId.toString()}',
+                                      requestType: requestType,
+                                      raisedBy: isDesigner
+                                          ? RestockRequestOrigin.designer
+                                          : RestockRequestOrigin.admin,
+                                      clearUnsetFields: false,
+                                      create: true,
+                                    ),
+                                    movementLogId:
+                                        'MVMT${_model.idmapresult?.movementLogId.toString()}',
+                                    status: InventoryRequestType.movementStatus(
+                                      requestType,
+                                    ),
+                                    designerUid: selectedProduct
+                                        ?.productAuthorizer
+                                        .productDesignerId,
+                                    inventoryRef:
+                                        selectedProduct?.product.inventoryRef,
+                                    productName: selectedProduct
+                                        ?.productInfo.name,
+                                  ));
+                              if (_model.idmapresult != null) {
+                                await _model.idmapresult!.reference.update({
+                                  ...mapToFirestore(
+                                    {
+                                      'inventory_request_id':
+                                          FieldValue.increment(1),
+                                      'movement_log_id':
+                                          FieldValue.increment(1),
+                                    },
                                   ),
-                                  singleRecord: true,
-                                ).then((s) => s.firstOrNull);
-                                _shouldSetState = true;
-                                if (FFAppState().currentUserRoleKey ==
-                                    'designer') {
-                                  await InventorymovementlogRecord.collection
-                                      .doc()
-                                      .set(createInventorymovementlogRecordData(
-                                        createdAt: getCurrentTimestamp,
-                                        updateAt: getCurrentTimestamp,
-                                        productId: _model.productID,
-                                        productRef: _model.productRef,
-                                        productQuantity: int.tryParse(
-                                            _model.quanityTextController.text),
-                                        requestInfo:
-                                            createInventoryRequestInfoStruct(
-                                          requestStatus: 'Pending',
-                                          inventoryRequestId:
-                                              'INVDRSQ${_model.idmapresult?.inventoryRequestId.toString()}',
-                                          designerNotes:
-                                              _model.notesTextController.text,
-                                          requestType: 'Return to Designer',
-                                          clearUnsetFields: false,
-                                          create: true,
-                                        ),
-                                        movementLogId:
-                                            'MVMT${_model.idmapresult?.movementLogId.toString()}',
-                                        status: 'Outbound',
-                                        designerUid: containerProductsRecordList
-                                            .where((e) =>
-                                                e.reference ==
-                                                _model.productRef)
-                                            .toList()
-                                            .firstOrNull
-                                            ?.productAuthorizer
-                                            .productDesignerId,
-                                        inventoryRef:
-                                            containerProductsRecordList
-                                                .where((e) =>
-                                                    e.reference ==
-                                                    _model.productRef)
-                                                .toList()
-                                                .firstOrNull
-                                                ?.product
-                                                .inventoryRef,
-                                      ));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        FFLocalizations.of(context)
-                                            .getVariableText(
-                                          enText: 'Request raised successfully',
-                                          arText: 'تم رفع الطلب بنجاح',
-                                        ),
-                                        style: GoogleFonts.inter(
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                        ),
-                                      ),
-                                      duration: Duration(milliseconds: 4000),
-                                      backgroundColor:
-                                          FlutterFlowTheme.of(context)
-                                              .secondary,
-                                    ),
-                                  );
-                                  Navigator.pop(context);
-                                } else {
-                                  await InventorymovementlogRecord.collection
-                                      .doc()
-                                      .set(createInventorymovementlogRecordData(
-                                        createdAt: getCurrentTimestamp,
-                                        updateAt: getCurrentTimestamp,
-                                        productId: _model.productID,
-                                        productRef: _model.productRef,
-                                        productQuantity: int.tryParse(
-                                            _model.quanityTextController.text),
-                                        requestInfo:
-                                            createInventoryRequestInfoStruct(
-                                          requestStatus: 'Pending',
-                                          adminPreferredDate: _model.datePicked,
-                                          adminNotes:
-                                              _model.notesTextController.text,
-                                          inventoryRequestId:
-                                              'INVNSQ${_model.idmapresult?.inventoryRequestId.toString()}',
-                                          requestType: 'Restock',
-                                          clearUnsetFields: false,
-                                          create: true,
-                                        ),
-                                        movementLogId:
-                                            'MVMT${_model.idmapresult?.movementLogId.toString()}',
-                                        status: 'inbound',
-                                        designerUid: containerProductsRecordList
-                                            .where((e) =>
-                                                e.reference ==
-                                                _model.productRef)
-                                            .toList()
-                                            .firstOrNull
-                                            ?.productAuthorizer
-                                            .productDesignerId,
-                                        inventoryRef:
-                                            containerProductsRecordList
-                                                .where((e) =>
-                                                    e.reference ==
-                                                    _model.productRef)
-                                                .toList()
-                                                .firstOrNull
-                                                ?.product
-                                                .inventoryRef,
-                                      ));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        FFLocalizations.of(context)
-                                            .getVariableText(
-                                          enText: 'Request raised successfully',
-                                          arText: 'تم رفع الطلب بنجاح',
-                                        ),
-                                        style: GoogleFonts.inter(
-                                          color: FlutterFlowTheme.of(context)
-                                              .primaryText,
-                                        ),
-                                      ),
-                                      duration: Duration(milliseconds: 4000),
-                                      backgroundColor:
-                                          FlutterFlowTheme.of(context)
-                                              .secondary,
-                                    ),
-                                  );
-                                  Navigator.pop(context);
-                                }
-                              } else {
-                                await showDialog(
-                                  context: context,
-                                  builder: (alertDialogContext) {
-                                    return WebViewAware(
-                                      child: AlertDialog(
-                                        content: Text(
-                                            FFLocalizations.of(context)
-                                                .getVariableText(
-                                          enText:
-                                              'Please select Preferred ETA Date',
-                                          arText:
-                                              'الرجاء تحديد تاريخ الوصول المفضل',
-                                        )),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(
-                                                alertDialogContext),
-                                            child: Text('Ok'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  },
-                                );
-                                if (_shouldSetState) safeSetState(() {});
-                                return;
+                                });
                               }
+                              final inventoryRef =
+                                  selectedProduct?.product.inventoryRef;
+                              if (inventoryRef != null) {
+                                await inventoryRef.update(
+                                  createInventoryRecordData(
+                                    updatedAt: getCurrentTimestamp,
+                                    restockRequestRaisedRef: logRef,
+                                  ),
+                                );
+                              }
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    FFLocalizations.of(context)
+                                        .getVariableText(
+                                      enText: 'Request raised successfully',
+                                      arText: 'تم رفع الطلب بنجاح',
+                                    ),
+                                    style: GoogleFonts.inter(
+                                      color: FlutterFlowTheme.of(context)
+                                          .primaryText,
+                                    ),
+                                  ),
+                                  duration: Duration(milliseconds: 4000),
+                                  backgroundColor:
+                                      FlutterFlowTheme.of(context).secondary,
+                                ),
+                              );
+                              Navigator.pop(context);
                             } else {
                               await showDialog(
                                 context: context,
@@ -2017,7 +2136,6 @@ class _NewRequestAddWidgetState extends State<NewRequestAddWidget> {
                                   );
                                 },
                               );
-                              if (_shouldSetState) safeSetState(() {});
                               return;
                             }
 

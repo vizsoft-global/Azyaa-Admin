@@ -16,6 +16,7 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
     String? adminNotes,
     DateTime? designerPreferredNotes,
     String? designerNotes,
+    String? raisedBy,
     FirestoreUtilData firestoreUtilData = const FirestoreUtilData(),
   })  : _inventoryRequestId = inventoryRequestId,
         _requestStatus = requestStatus,
@@ -25,6 +26,7 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         _adminNotes = adminNotes,
         _designerPreferredNotes = designerPreferredNotes,
         _designerNotes = designerNotes,
+        _raisedBy = raisedBy,
         super(firestoreUtilData);
 
   // "inventory_request_id" field.
@@ -83,6 +85,12 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
 
   bool hasDesignerNotes() => _designerNotes != null;
 
+  String? _raisedBy;
+  String get raisedBy => _raisedBy ?? '';
+  set raisedBy(String? val) => _raisedBy = val;
+
+  bool hasRaisedBy() => _raisedBy != null;
+
   static InventoryRequestInfoStruct fromMap(Map<String, dynamic> data) =>
       InventoryRequestInfoStruct(
         inventoryRequestId: data['inventory_request_id'] as String?,
@@ -93,6 +101,7 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         adminNotes: data['admin_notes'] as String?,
         designerPreferredNotes: data['designer_preferred_notes'] as DateTime?,
         designerNotes: data['designer_notes'] as String?,
+        raisedBy: data['raised_by'] as String?,
       );
 
   static InventoryRequestInfoStruct? maybeFromMap(dynamic data) => data is Map
@@ -108,6 +117,7 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         'admin_notes': _adminNotes,
         'designer_preferred_notes': _designerPreferredNotes,
         'designer_notes': _designerNotes,
+        'raised_by': _raisedBy,
       }.withoutNulls;
 
   @override
@@ -142,6 +152,10 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         ),
         'designer_notes': serializeParam(
           _designerNotes,
+          ParamType.String,
+        ),
+        'raised_by': serializeParam(
+          _raisedBy,
           ParamType.String,
         ),
       }.withoutNulls;
@@ -186,6 +200,11 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         ),
         designerNotes: deserializeParam(
           data['designer_notes'],
+          ParamType.String,
+          false,
+        ),
+        raisedBy: deserializeParam(
+          data['raised_by'],
           ParamType.String,
           false,
         ),
@@ -234,6 +253,11 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
           ParamType.String,
           false,
         ),
+        raisedBy: convertAlgoliaParam(
+          data['raised_by'],
+          ParamType.String,
+          false,
+        ),
         firestoreUtilData: FirestoreUtilData(
           clearUnsetFields: false,
           create: true,
@@ -253,7 +277,8 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         adminPreferredDate == other.adminPreferredDate &&
         adminNotes == other.adminNotes &&
         designerPreferredNotes == other.designerPreferredNotes &&
-        designerNotes == other.designerNotes;
+        designerNotes == other.designerNotes &&
+        raisedBy == other.raisedBy;
   }
 
   @override
@@ -265,7 +290,8 @@ class InventoryRequestInfoStruct extends FFFirebaseStruct {
         adminPreferredDate,
         adminNotes,
         designerPreferredNotes,
-        designerNotes
+        designerNotes,
+        raisedBy,
       ]);
 }
 
@@ -278,6 +304,7 @@ InventoryRequestInfoStruct createInventoryRequestInfoStruct({
   String? adminNotes,
   DateTime? designerPreferredNotes,
   String? designerNotes,
+  String? raisedBy,
   Map<String, dynamic> fieldValues = const {},
   bool clearUnsetFields = true,
   bool create = false,
@@ -292,6 +319,7 @@ InventoryRequestInfoStruct createInventoryRequestInfoStruct({
       adminNotes: adminNotes,
       designerPreferredNotes: designerPreferredNotes,
       designerNotes: designerNotes,
+      raisedBy: raisedBy,
       firestoreUtilData: FirestoreUtilData(
         clearUnsetFields: clearUnsetFields,
         create: create,

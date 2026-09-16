@@ -4045,6 +4045,21 @@ class _ProductShippingDetailsWidgetState
                                             ?.enquiryDeliveryInfo
                                             .pickupAddress
                                             .country,
+                                        fromBuilding: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .pickupAddress
+                                            .building,
+                                        fromBlock: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .pickupAddress
+                                            .block,
+                                        fromGovernorate: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .pickupAddress
+                                            .state,
                                         fromlatitude: functions
                                             .getlatlong(widget
                                                 .invmovlogDoc!
@@ -4084,6 +4099,21 @@ class _ProductShippingDetailsWidgetState
                                             ?.enquiryDeliveryInfo
                                             .deliveryAddress
                                             .country,
+                                        toBuilding: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .deliveryAddress
+                                            .building,
+                                        toBlock: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .deliveryAddress
+                                            .block,
+                                        toGovernorate: widget
+                                            .invmovlogDoc
+                                            ?.enquiryDeliveryInfo
+                                            .deliveryAddress
+                                            .state,
                                         tolatitude: functions
                                             .getlatlong(widget
                                                 .invmovlogDoc!
@@ -4116,6 +4146,10 @@ class _ProductShippingDetailsWidgetState
                                             ? shippinglabelSettingsRecord
                                                 ?.settingsLogisticsInfo.testKey
                                             : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiYTZlMTJlYi0xMThjLTRlMTMtYjRlNi0xMjk3MWM4NDBkODAiLCJpc3MiOiJzd2Z0Ym94LmNvbSIsImF1ZCI6Imh0dHBzOi8vd3d3LnN3ZnRib3guY29tIiwic2NvcGUiOlsiY3JlYXRlLW9yZGVycyxjYW5jZWwtb3JkZXJzLHRyYWNrLW9yZGVycyJdLCJyZXRhaWxlcklkIjoiOTk2ZDI4OWEtNDFmOS00NTJmLWI3NjgtNTVkNTdhM2Q5ZmQxIiwiaW50ZWdyYXRpb25UeXBlIjoiU1dGVEJPWCIsImlkIjoiYmE2ZTEyZWItMTE4Yy00ZTEzLWI0ZTYtMTI5NzFjODQwZDgwIiwiY3JlYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwidXBkYXRlZEF0IjoiMjAyNS0wNy0yMlQwODozOTo1Ni44NjJaIiwiZGVsZXRlZEF0IjpudWxsLCJuYW1lIjoiVml6c29mdCIsInBob25lIjoiKzk2NTYxMDA2MzE0IiwiZW1haWwiOiJpdEB2aXpzb2Z0LmluIiwicGFzc3dvcmQiOm51bGwsInN0YXR1cyI6ImFjdGl2ZSIsInBob25lVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImVtYWlsVmVyaWZpZWRBdCI6IjIwMjUtMDctMjJUMDg6Mzk6NTYuODYzWiIsImlzU1NPVXNlciI6dHJ1ZSwiaWF0IjoxNzYwNDM2NzQ0LCJleHAiOjE3NjA0NTgzNDR9.-cMaPKKqDVUqhJIzfpvSLFIcmMe9HzGKN3mn5VOG5f0',
+                                        designerId: containerUsersRecord
+                                            ?.designerMainInfo.designerId,
+                                        customerUserId:
+                                            containerUsersRecord?.uid,
                                       );
 
                                       _shouldSetState = true;
@@ -4455,6 +4489,21 @@ class _ProductShippingDetailsWidgetState
                                             ?.requestDeliveryInfo
                                             .pickupAddress
                                             .country,
+                                        fromBuilding: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .pickupAddress
+                                            .building,
+                                        fromBlock: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .pickupAddress
+                                            .block,
+                                        fromGovernorate: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .pickupAddress
+                                            .state,
                                         fromlatitude: functions
                                             .getlatlong(widget
                                                 .invmovlogDoc!
@@ -4494,6 +4543,21 @@ class _ProductShippingDetailsWidgetState
                                             ?.requestDeliveryInfo
                                             .deliveryAddress
                                             .country,
+                                        toBuilding: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .deliveryAddress
+                                            .building,
+                                        toBlock: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .deliveryAddress
+                                            .block,
+                                        toGovernorate: widget
+                                            .invmovlogDoc
+                                            ?.requestDeliveryInfo
+                                            .deliveryAddress
+                                            .state,
                                         tolatitude: functions
                                             .getlatlong(widget
                                                 .invmovlogDoc!
@@ -4532,6 +4596,10 @@ class _ProductShippingDetailsWidgetState
                                         itemsListJson: _model.item?.toMap(),
                                         deliveryInstructions:
                                             _model.textController1.text,
+                                        designerId: containerUsersRecord
+                                            ?.designerMainInfo.designerId,
+                                        customerUserId:
+                                            containerUsersRecord?.uid,
                                       );
 
                                       _shouldSetState = true;

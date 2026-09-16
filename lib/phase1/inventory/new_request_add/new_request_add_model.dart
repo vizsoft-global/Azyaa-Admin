@@ -23,6 +23,9 @@ class NewRequestAddModel extends FlutterFlowModel<NewRequestAddWidget> {
   FormFieldController<String>? productDropdownValueController;
   // Stores action output result for [Backend Call - Read Document] action in productDropdown widget.
   InventoryRecord? inventoryDoc;
+  // State field(s) for request type dropdown.
+  String? requestTypeValue;
+  FormFieldController<String>? requestTypeValueController;
   // State field(s) for PlatformRate widget.
   String? platformRateValue;
   FormFieldController<String>? platformRateValueController;

@@ -18,6 +18,9 @@ import '/phase1/order/orders/orders_widget.dart'
     show AzyaaDateRangePickerDialog, orderMatchesDateFilter;
 import '/custom_code/widgets/index.dart';
 import '/index.dart';
+import '/backend/store_valley/store_valley_config.dart';
+import '/backend/store_valley/warehouse_stock.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_debounce.dart';
@@ -93,6 +96,8 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
   late Future<List<UsersRecord>> _designersFuture;
   bool _isExporting = false;
   bool _isLoadingMore = false;
+  bool _isRefreshingWarehouseStock = false;
+  bool _isBackfillingReservations = false;
 
   void _resetInventoryWindow() {
     _model.visibleCount = InventoryPMModel.initialVisibleCount;
@@ -116,6 +121,137 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
         chip.isEmpty ||
         chip == 'All' ||
         chip == 'الجميع';
+  }
+
+  List<DataColumn2> _warehouseStockColumns() {
+    Widget header(String label) {
+      return DefaultTextStyle.merge(
+        softWrap: true,
+        child: Text(
+          label,
+          style: FlutterFlowTheme.of(context).labelLarge.override(
+                font: GoogleFonts.inter(
+                  fontWeight: FontWeight.w500,
+                  fontStyle: FlutterFlowTheme.of(context).labelLarge.fontStyle,
+                ),
+                color: const Color(0xFF616161),
+                fontSize: 12.0,
+                letterSpacing: 0.0,
+                fontWeight: FontWeight.w500,
+                fontStyle: FlutterFlowTheme.of(context).labelLarge.fontStyle,
+              ),
+        ),
+      );
+    }
+
+    return [
+      DataColumn2(label: header('Warehouse stored')),
+      DataColumn2(label: header('Available for order')),
+    ];
+  }
+
+  List<Widget> _warehouseStockCells(InventoryRecord item) {
+    return [
+      WarehouseStockCell(
+        productId: item.productId,
+        sku: item.productSku,
+        field: WarehouseStockField.stored,
+      ),
+      WarehouseStockCell(
+        productId: item.productId,
+        sku: item.productSku,
+        field: WarehouseStockField.availableForOrder,
+        reserved: item.stockReserved,
+        unavailable: item.stockUnavailable,
+      ),
+    ];
+  }
+
+  Future<void> _refreshWarehouseStock() async {
+    if (_isRefreshingWarehouseStock) {
+      return;
+    }
+    safeSetState(() => _isRefreshingWarehouseStock = true);
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable(StoreValleyConfig.syncInventoryCallableName)
+          .call({
+        'designer_id': StoreValleyConfig.fallbackDesignerId,
+        'warehouse_id': StoreValleyConfig.warehouseId,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final upserted = data['upserted'] ?? 0;
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Warehouse stock refreshed ($upserted rows).'),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Warehouse stock refresh failed.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Warehouse stock refresh failed.')),
+      );
+    } finally {
+      if (mounted) {
+        safeSetState(() => _isRefreshingWarehouseStock = false);
+      }
+    }
+  }
+
+  Future<void> _backfillWarehouseReservations() async {
+    if (_isBackfillingReservations) {
+      return;
+    }
+    safeSetState(() => _isBackfillingReservations = true);
+    try {
+      final data = await WarehouseStockReservation.backfill();
+      if (!mounted) {
+        return;
+      }
+      final reserved = data['reserved'] ?? 0;
+      final skipped = data['skipped'] ?? 0;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Reserved $reserved open warehouse orders ($skipped skipped).',
+          ),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Reserved-order sync failed.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reserved-order sync failed.')),
+      );
+    } finally {
+      if (mounted) {
+        safeSetState(() => _isBackfillingReservations = false);
+      }
+    }
   }
 
   void _resetAllInventoryFilters() {
@@ -1285,6 +1421,25 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                     _buildInventorySortDropdown(),
                                                                   ],
                                                                   extraTrailing: [
+                                                                    AzyaaToolbarButtons.refreshWarehouse(
+                                                                      context: context,
+                                                                      onPressed: _isRefreshingWarehouseStock
+                                                                          ? null
+                                                                          : _refreshWarehouseStock,
+                                                                      isRefreshing:
+                                                                          _isRefreshingWarehouseStock,
+                                                                    ),
+                                                                    AzyaaToolbarButtons.refreshWarehouse(
+                                                                      context: context,
+                                                                      onPressed: _isBackfillingReservations
+                                                                          ? null
+                                                                          : _backfillWarehouseReservations,
+                                                                      isRefreshing:
+                                                                          _isBackfillingReservations,
+                                                                      label: _isBackfillingReservations
+                                                                          ? 'Syncing reserved...'
+                                                                          : 'Sync reserved orders',
+                                                                    ),
                                                                     if ((_model.dateFilter == 'Custom') &&
                                                                         (_model.customRangeStart != null) &&
                                                                         (_model.customRangeEnd != null))
@@ -1615,13 +1770,12 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                     ),
                                                                                   ),
                                                                                 ),
+                                                                                ..._warehouseStockColumns(),
                                                                                 DataColumn2(
                                                                                   label: DefaultTextStyle.merge(
                                                                                     softWrap: true,
                                                                                     child: Text(
-                                                                                      FFLocalizations.of(context).getText(
-                                                                                        'qoj8iyi7' /* Committed */,
-                                                                                      ),
+                                                                                      'Reserved',
                                                                                       style: FlutterFlowTheme.of(context).labelLarge.override(
                                                                                             font: GoogleFonts.inter(
                                                                                               fontWeight: FontWeight.w500,
@@ -1934,6 +2088,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                           fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                         ),
                                                                                   ),
+                                                                                  ..._warehouseStockCells(inventoryListItem),
                                                                                   Text(
                                                                                     valueOrDefault<String>(
                                                                                       inventoryListItem.stockReserved.toString(),
@@ -2340,6 +2495,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                   ),
                                                                                 ),
                                                                               ),
+                                                                              ..._warehouseStockColumns(),
                                                                               DataColumn2(
                                                                                 label: DefaultTextStyle.merge(
                                                                                   softWrap: true,
@@ -2576,6 +2732,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                         fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                       ),
                                                                                 ),
+                                                                                ..._warehouseStockCells(lowstockListItem),
                                                                                 Row(
                                                                                   mainAxisSize: MainAxisSize.max,
                                                                                   children: [
@@ -2988,13 +3145,12 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                   ),
                                                                                 ),
                                                                               ),
+                                                                              ..._warehouseStockColumns(),
                                                                               DataColumn2(
                                                                                 label: DefaultTextStyle.merge(
                                                                                   softWrap: true,
                                                                                   child: Text(
-                                                                                    FFLocalizations.of(context).getText(
-                                                                                      '86oak1lf' /* Committed */,
-                                                                                    ),
+                                                                                    'Reserved',
                                                                                     style: FlutterFlowTheme.of(context).labelLarge.override(
                                                                                           font: GoogleFonts.inter(
                                                                                             fontWeight: FontWeight.w500,
@@ -3322,6 +3478,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                       ),
                                                                                   ].divide(SizedBox(width: 8.0)),
                                                                                 ),
+                                                                                ..._warehouseStockCells(inventoryListItem),
                                                                                 Text(
                                                                                   valueOrDefault<String>(
                                                                                     inventoryListItem.stockReserved.toString(),
@@ -3733,6 +3890,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                 ),
                                                                                 fixedWidth: 0.0,
                                                                               ),
+                                                                              ..._warehouseStockColumns(),
                                                                               DataColumn2(
                                                                                 label: DefaultTextStyle.merge(
                                                                                   softWrap: true,
@@ -4007,6 +4165,7 @@ class _InventoryPMWidgetState extends State<InventoryPMWidget> {
                                                                                       ),
                                                                                   ].divide(SizedBox(width: 8.0)),
                                                                                 ),
+                                                                                ..._warehouseStockCells(lowstockListItem),
                                                                                 Row(
                                                                                   mainAxisSize: MainAxisSize.min,
                                                                                   children: [

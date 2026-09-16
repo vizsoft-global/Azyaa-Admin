@@ -142,18 +142,51 @@ class SettingsModel extends FlutterFlowModel<SettingsWidget> {
   FocusNode? nameFocusNode;
   TextEditingController? nameTextController;
   String? Function(BuildContext, String?)? nameTextControllerValidator;
+  String? _nameTextControllerValidator(BuildContext context, String? val) {
+    if (val == null || val.isEmpty) {
+      return 'Contact name is required';
+    }
+    return null;
+  }
+
   // State field(s) for title widget.
   FocusNode? titleFocusNode8;
   TextEditingController? titleTextController8;
   String? Function(BuildContext, String?)? titleTextController8Validator;
+  String? _titleTextController8Validator(BuildContext context, String? val) {
+    if (val == null || val.isEmpty) {
+      return 'Contact phone is required';
+    }
+    if (!RegExp(
+            '^(?:\\+?(?:965|966|971|968|974|973)|0)?(5\\d{8}|[569]\\d{7}|9[1-9]\\d{6}|3\\d{7}|[3-7]\\d{7}|5[024568]\\d{7})\$')
+        .hasMatch(val)) {
+      return 'Please enter a valid mobile number';
+    }
+    return null;
+  }
+
   // State field(s) for Address widget.
   FocusNode? addressFocusNode;
   TextEditingController? addressTextController;
   String? Function(BuildContext, String?)? addressTextControllerValidator;
+  String? _addressTextControllerValidator(BuildContext context, String? val) {
+    if (val == null || val.isEmpty) {
+      return 'Street is required';
+    }
+    return null;
+  }
+
   // State field(s) for City widget.
   FocusNode? cityFocusNode;
   TextEditingController? cityTextController;
   String? Function(BuildContext, String?)? cityTextControllerValidator;
+  String? _cityTextControllerValidator(BuildContext context, String? val) {
+    if (val == null || val.isEmpty) {
+      return 'City is required';
+    }
+    return null;
+  }
+
   // State field(s) for Region widget.
   FocusNode? regionFocusNode;
   TextEditingController? regionTextController;
@@ -163,10 +196,14 @@ class SettingsModel extends FlutterFlowModel<SettingsWidget> {
   FormFieldController<String>? countryValueController;
   // Stores action output result for [Backend Call - API (CountryISO)] action in Country widget.
   ApiCallResponse? apiResultCountryISO;
-  // State field(s) for PostalCode widget.
-  FocusNode? postalCodeFocusNode;
-  TextEditingController? postalCodeTextController;
-  String? Function(BuildContext, String?)? postalCodeTextControllerValidator;
+  // State field(s) for Building widget.
+  FocusNode? buildingFocusNode;
+  TextEditingController? buildingTextController;
+  String? Function(BuildContext, String?)? buildingTextControllerValidator;
+  // State field(s) for Block widget.
+  FocusNode? blockFocusNode;
+  TextEditingController? blockTextController;
+  String? Function(BuildContext, String?)? blockTextControllerValidator;
   // State field(s) for Checkbox widget.
   bool? checkboxValue2;
   // State field(s) for ProductionKey widget.
@@ -268,6 +305,10 @@ class SettingsModel extends FlutterFlowModel<SettingsWidget> {
     azyaaResponsiveModel = createModel(context, () => AzyaaResponsiveModel());
     themeStatusCheckerModel =
         createModel(context, () => ThemeStatusCheckerModel());
+    nameTextControllerValidator = _nameTextControllerValidator;
+    titleTextController8Validator = _titleTextController8Validator;
+    addressTextControllerValidator = _addressTextControllerValidator;
+    cityTextControllerValidator = _cityTextControllerValidator;
   }
 
   @override
@@ -343,8 +384,11 @@ class SettingsModel extends FlutterFlowModel<SettingsWidget> {
     regionFocusNode?.dispose();
     regionTextController?.dispose();
 
-    postalCodeFocusNode?.dispose();
-    postalCodeTextController?.dispose();
+    buildingFocusNode?.dispose();
+    buildingTextController?.dispose();
+
+    blockFocusNode?.dispose();
+    blockTextController?.dispose();
 
     productionKeyFocusNode?.dispose();
     productionKeyTextController?.dispose();

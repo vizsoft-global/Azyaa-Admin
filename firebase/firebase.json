@@ -6,11 +6,13 @@
   "functions": [
     {
       "source": "custom_cloud_functions",
-      "codebase": "custom_cloud_functions"
+      "codebase": "custom_cloud_functions",
+      "runtime": "nodejs22"
     },
     {
       "source": "functions",
-      "codebase": "functions"
+      "codebase": "functions",
+      "runtime": "nodejs22"
     }
   ],
   "storage": {

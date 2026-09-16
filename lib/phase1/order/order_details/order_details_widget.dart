@@ -9,6 +9,11 @@ import '/phase1/component/azyaa_responsive/azyaa_responsive_widget.dart';
 import '/phase1/component/azyaa_sidebar/azyaa_sidebar_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/return/reject_return/reject_return_widget.dart';
+import '/backend/store_valley/shopper_return_flow.dart';
+import '/backend/store_valley/shopper_return_payload.dart';
+import '/backend/store_valley/store_valley_intake_tracking.dart';
+import '/backend/store_valley/store_valley_status.dart';
+import '/backend/store_valley/store_valley_inventory_record.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
 import '/index.dart';
 import 'package:aligned_tooltip/aligned_tooltip.dart';
@@ -71,6 +76,183 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  Widget _customerShipmentCards({
+    required OrdersRecord order,
+    required List<DeliveryRecord> deliveries,
+  }) {
+    final ready = functions.customerDeliveriesOfType(
+      order.deliveryInfoList.toList(),
+      'ready',
+    );
+    final custom = functions.customerDeliveriesOfType(
+      order.deliveryInfoList.toList(),
+      'custom',
+    );
+    if (ready.isEmpty && custom.isEmpty) {
+      return SizedBox.shrink();
+    }
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(16.0, 16.0, 16.0, 8.0),
+      child: Wrap(
+        spacing: 12.0,
+        runSpacing: 12.0,
+        children: [
+          if (ready.isNotEmpty)
+            _shipmentCard(
+              title: FFLocalizations.of(context).getVariableText(
+                enText: 'Ready-made shipment',
+                arText: 'شحنة المنتجات الجاهزة',
+              ),
+              info: ready.first,
+              deliveries: deliveries,
+              typeStatus: order.readyShippingRequestStatus,
+            ),
+          if (custom.isNotEmpty)
+            _shipmentCard(
+              title: FFLocalizations.of(context).getVariableText(
+                enText: 'Custom-made shipment',
+                arText: 'شحنة المنتجات المصنوعة حسب الطلب',
+              ),
+              info: custom.first,
+              deliveries: deliveries,
+              typeStatus: order.customShippingRequestStatus,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shipmentCard({
+    required String title,
+    required DeliveryInfoStruct info,
+    required List<DeliveryRecord> deliveries,
+    required String typeStatus,
+  }) {
+    final delivery = deliveries
+        .where((e) => info.deliveryRef == e.reference)
+        .toList()
+        .firstOrNull;
+    final status = (delivery?.status.isNotEmpty == true)
+        ? delivery!.status
+        : (typeStatus.isNotEmpty ? typeStatus : info.status);
+    final otpStatus = delivery?.otpVerificationStatus ?? '';
+    return Container(
+      width: 320.0,
+      decoration: BoxDecoration(
+        color: Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+      child: Padding(
+        padding: EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    font: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                    color: FlutterFlowTheme.of(context).tertiary,
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            SizedBox(height: 4.0),
+            SelectionArea(
+              child: Text(
+                'Tracking ID : ${valueOrDefault<String>(info.deliveryTrackingId, '-')}',
+                style: FlutterFlowTheme.of(context).bodyMedium.override(
+                      font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                      color: FlutterFlowTheme.of(context).tertiary,
+                      fontSize: 12.0,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+            SizedBox(height: 4.0),
+            Text(
+              StoreValleyStatus.displayLabel(status),
+              style: FlutterFlowTheme.of(context).bodyMedium.override(
+                    font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                    color: FlutterFlowTheme.of(context).azyaaAccepted,
+                    fontSize: 12.0,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+            _shipmentOtpRow(
+              info: info,
+              otpVerificationStatus: otpStatus,
+              deliveryStatus: status,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _shipmentOtpRow({
+    required DeliveryInfoStruct info,
+    required String otpVerificationStatus,
+    required String deliveryStatus,
+  }) {
+    if (StoreValleyIntakeTracking.isOtpVerified(
+      otpVerificationStatus: otpVerificationStatus,
+      intakeStatus: deliveryStatus,
+    )) {
+      return SizedBox.shrink();
+    }
+    if (info.pickupOtp.trim().isNotEmpty) {
+      return _otpText(info.pickupOtp);
+    }
+    final trackingId = info.deliveryTrackingId.trim();
+    if (trackingId.isEmpty) {
+      return SizedBox.shrink();
+    }
+    return StreamBuilder<List<LogisticsResponseRecord>>(
+      stream: queryLogisticsResponseRecord(
+        queryBuilder: (logisticsResponseRecord) =>
+            logisticsResponseRecord.where(
+          'swftTrackID',
+          isEqualTo: trackingId,
+        ),
+        singleRecord: true,
+      ),
+      builder: (context, snapshot) {
+        final otp = snapshot.data?.firstOrNull?.pickupOtp ?? '';
+        final label = StoreValleyIntakeTracking.customerShipmentOtpLabel(
+          pickupOtp: otp,
+          otpVerificationStatus:
+              snapshot.data?.firstOrNull?.otpVerificationStatus ??
+                  otpVerificationStatus,
+          deliveryStatus: deliveryStatus,
+        );
+        if (label == null) {
+          return SizedBox.shrink();
+        }
+        return _otpText(otp);
+      },
+    );
+  }
+
+  Widget _otpText(String otp) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4.0),
+      child: SelectionArea(
+        child: Text(
+          FFLocalizations.of(context).getVariableText(
+            enText: 'OTP : ${otp.trim()}',
+            arText: 'رمز التحقق : ${otp.trim()}',
+          ),
+          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+                color: FlutterFlowTheme.of(context).tertiary,
+                fontSize: 12.0,
+                fontWeight: FontWeight.w500,
+              ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1553,6 +1735,10 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                     thickness: 1.0,
                                                                                     color: Color(0xFFE0E0E0),
                                                                                   ),
+                                                                                _customerShipmentCards(
+                                                                                  order: columnOrdersRecord,
+                                                                                  deliveries: containerDeliveryRecordList,
+                                                                                ),
                                                                                 Builder(
                                                                                   builder: (context) {
                                                                                     final cartItemsList = columnOrdersRecord.orderItems.cartItems.where((e) => FFAppState().currentUserRoleKey == 'designer' ? (e.productDesignerId == currentUserUid) : true).toList();
@@ -1594,14 +1780,18 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                           if (() {
                                                                                                             if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && ((cartItemsListItem.productMainType == 'ready') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false))) {
                                                                                                               return true;
-                                                                                                            } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                            } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                               return true;
-                                                                                                            } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                            } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                               return true;
                                                                                                             } else {
                                                                                                               return false;
                                                                                                             }
-                                                                                                          }())
+                                                                                                          }() &&
+                                                                                                              functions.canSelectCartItemForDelivery(
+                                                                                                                cartItemsListItem,
+                                                                                                                FFAppState().deliveryflow.selectedItemss.toList(),
+                                                                                                              ))
                                                                                                             Padding(
                                                                                                               padding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 8.0, 0.0),
                                                                                                               child: AuthUserStreamWidget(
@@ -1612,14 +1802,18 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                                       if (() {
                                                                                                                         if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && ((cartItemsListItem.productMainType == 'ready') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false))) {
                                                                                                                           return true;
-                                                                                                                        } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                                        } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                           return true;
-                                                                                                                        } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                                        } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                           return true;
                                                                                                                         } else {
                                                                                                                           return false;
                                                                                                                         }
-                                                                                                                      }())
+                                                                                                                      }() &&
+                                                                                                                          functions.canSelectCartItemForDelivery(
+                                                                                                                            cartItemsListItem,
+                                                                                                                            FFAppState().deliveryflow.selectedItemss.toList(),
+                                                                                                                          ))
                                                                                                                         Container(
                                                                                                                           width: 30.0,
                                                                                                                           decoration: BoxDecoration(),
@@ -1656,14 +1850,18 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                                               visible: () {
                                                                                                                                 if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && ((cartItemsListItem.productMainType == 'ready') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false))) {
                                                                                                                                   return true;
-                                                                                                                                } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                                                } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                                   return true;
-                                                                                                                                } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && (cartItemsListItem.productPickupInfo.status == 'Recevied') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
+                                                                                                                                } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && ((cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') || (cartItemsListItem.productPickupInfo.status == 'Recevied')) && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                                   return true;
                                                                                                                                 } else {
                                                                                                                                   return false;
                                                                                                                                 }
-                                                                                                                              }(),
+                                                                                                                              }() &&
+                                                                                                                                  functions.canSelectCartItemForDelivery(
+                                                                                                                                    cartItemsListItem,
+                                                                                                                                    FFAppState().deliveryflow.selectedItemss.toList(),
+                                                                                                                                  ),
                                                                                                                               child: Theme(
                                                                                                                                 data: ThemeData(
                                                                                                                                   checkboxTheme: CheckboxThemeData(
@@ -1678,8 +1876,27 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                                                 child: Checkbox(
                                                                                                                                   value: _model.sCCheckboxValueMap[cartItemsListItem] ??= FFAppState().deliveryflow.selectedItemss.contains(cartItemsListItem) == true ? true : false,
                                                                                                                                   onChanged: (newValue) async {
-                                                                                                                                    safeSetState(() => _model.sCCheckboxValueMap[cartItemsListItem] = newValue!);
-                                                                                                                                    if (newValue!) {
+                                                                                                                                    final selected = newValue == true;
+                                                                                                                                    if (selected &&
+                                                                                                                                        !functions.canSelectCartItemForDelivery(
+                                                                                                                                          cartItemsListItem,
+                                                                                                                                          FFAppState().deliveryflow.selectedItemss.toList(),
+                                                                                                                                        )) {
+                                                                                                                                      safeSetState(() => _model.sCCheckboxValueMap[cartItemsListItem] = false);
+                                                                                                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                                                                                                        SnackBar(
+                                                                                                                                          content: Text(
+                                                                                                                                            FFLocalizations.of(context).getVariableText(
+                                                                                                                                              enText: 'Ready-made and custom-made items must ship separately.',
+                                                                                                                                              arText: 'يجب شحن المنتجات الجاهزة والمصنوعة حسب الطلب بشكل منفصل.',
+                                                                                                                                            ),
+                                                                                                                                          ),
+                                                                                                                                        ),
+                                                                                                                                      );
+                                                                                                                                      return;
+                                                                                                                                    }
+                                                                                                                                    safeSetState(() => _model.sCCheckboxValueMap[cartItemsListItem] = selected);
+                                                                                                                                    if (selected) {
                                                                                                                                       FFAppState().updateDeliveryflowStruct(
                                                                                                                                         (e) => e
                                                                                                                                           ..updateSelectedItemss(
@@ -1760,6 +1977,107 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                                                 fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                                                               ),
                                                                                                                         )),
+                                                                                                                        if (StoreValleyInventoryRecord.isWarehouseReservable(
+                                                                                                                              productMainType: cartItemsListItem.productMainType,
+                                                                                                                              isPreferredVendor: cartItemsListItem.productStockInfo.isPreferredVendor,
+                                                                                                                            ) &&
+                                                                                                                            columnOrdersRecord.inventoryReservationStatus == 'reserved' &&
+                                                                                                                            functions.isProductInDeliveryList(
+                                                                                                                                  cartItemsListItem,
+                                                                                                                                  columnOrdersRecord.deliveryInfoList.toList(),
+                                                                                                                                ) ==
+                                                                                                                                false &&
+                                                                                                                            functions.warehouseDeliveryBadgeLabel(columnOrdersRecord.readyShippingRequestStatus).isEmpty)
+                                                                                                                          Padding(
+                                                                                                                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 4.0, 0.0, 0.0),
+                                                                                                                            child: Container(
+                                                                                                                              padding: EdgeInsetsDirectional.fromSTEB(8.0, 2.0, 8.0, 2.0),
+                                                                                                                              decoration: BoxDecoration(
+                                                                                                                                color: FlutterFlowTheme.of(context).secondaryBackground,
+                                                                                                                                borderRadius: BorderRadius.circular(4.0),
+                                                                                                                                border: Border.all(
+                                                                                                                                  color: FlutterFlowTheme.of(context).border,
+                                                                                                                                ),
+                                                                                                                              ),
+                                                                                                                              child: Text(
+                                                                                                                                'Warehouse stock reserved',
+                                                                                                                                style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                                                                      font: GoogleFonts.inter(
+                                                                                                                                        fontWeight: FontWeight.w500,
+                                                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                                                                      ),
+                                                                                                                                      fontSize: 11.0,
+                                                                                                                                      letterSpacing: 0.0,
+                                                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                                                    ),
+                                                                                                                              ),
+                                                                                                                            ),
+                                                                                                                          ),
+                                                                                                                        if (StoreValleyInventoryRecord.isWarehouseReservable(
+                                                                                                                              productMainType: cartItemsListItem.productMainType,
+                                                                                                                              isPreferredVendor: cartItemsListItem.productStockInfo.isPreferredVendor,
+                                                                                                                            ) &&
+                                                                                                                            columnOrdersRecord.inventoryReservationStatus == 'stock_failed')
+                                                                                                                          Padding(
+                                                                                                                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 4.0, 0.0, 0.0),
+                                                                                                                            child: Text(
+                                                                                                                              'Warehouse stock failed',
+                                                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                                                                    font: GoogleFonts.inter(
+                                                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                                                                    ),
+                                                                                                                                    color: FlutterFlowTheme.of(context).error,
+                                                                                                                                    fontSize: 11.0,
+                                                                                                                                    letterSpacing: 0.0,
+                                                                                                                                    fontWeight: FontWeight.w500,
+                                                                                                                                  ),
+                                                                                                                            ),
+                                                                                                                          ),
+                                                                                                                        if (StoreValleyInventoryRecord.isWarehouseReservable(
+                                                                                                                              productMainType: cartItemsListItem.productMainType,
+                                                                                                                              isPreferredVendor: cartItemsListItem.productStockInfo.isPreferredVendor,
+                                                                                                                            ) &&
+                                                                                                                            functions.warehouseDeliveryBadgeLabel(columnOrdersRecord.readyShippingRequestStatus).isNotEmpty)
+                                                                                                                          Padding(
+                                                                                                                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 4.0, 0.0, 0.0),
+                                                                                                                            child: Text(
+                                                                                                                              functions.warehouseDeliveryBadgeLabel(columnOrdersRecord.readyShippingRequestStatus),
+                                                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                                                                    font: GoogleFonts.inter(
+                                                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                                                                    ),
+                                                                                                                                    color: columnOrdersRecord.readyShippingRequestStatus.toLowerCase() == 'failed'
+                                                                                                                                        ? FlutterFlowTheme.of(context).error
+                                                                                                                                        : FlutterFlowTheme.of(context).primaryText,
+                                                                                                                                    fontSize: 11.0,
+                                                                                                                                    letterSpacing: 0.0,
+                                                                                                                                    fontWeight: FontWeight.w500,
+                                                                                                                                  ),
+                                                                                                                            ),
+                                                                                                                          ),
+                                                                                                                        if (((cartItemsListItem.productMainType == 'custom') ||
+                                                                                                                                (cartItemsListItem.productStockInfo.isPreferredVendor == false)) &&
+                                                                                                                            functions.customDeliveryBadgeLabel(columnOrdersRecord.customShippingRequestStatus).isNotEmpty)
+                                                                                                                          Padding(
+                                                                                                                            padding: EdgeInsetsDirectional.fromSTEB(0.0, 4.0, 0.0, 0.0),
+                                                                                                                            child: Text(
+                                                                                                                              functions.customDeliveryBadgeLabel(columnOrdersRecord.customShippingRequestStatus),
+                                                                                                                              style: FlutterFlowTheme.of(context).bodySmall.override(
+                                                                                                                                    font: GoogleFonts.inter(
+                                                                                                                                      fontWeight: FontWeight.w500,
+                                                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodySmall.fontStyle,
+                                                                                                                                    ),
+                                                                                                                                    color: columnOrdersRecord.customShippingRequestStatus.toLowerCase() == 'failed'
+                                                                                                                                        ? FlutterFlowTheme.of(context).error
+                                                                                                                                        : FlutterFlowTheme.of(context).primaryText,
+                                                                                                                                    fontSize: 11.0,
+                                                                                                                                    letterSpacing: 0.0,
+                                                                                                                                    fontWeight: FontWeight.w500,
+                                                                                                                                  ),
+                                                                                                                            ),
+                                                                                                                          ),
                                                                                                                         Builder(
                                                                                                                           builder: (context) {
                                                                                                                             final attributeList = cartItemsListItem.cartItemAttribute.toList();
@@ -2502,21 +2820,14 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                                                       ].divide(SizedBox(height: 4.0)),
                                                                                                                     ),
                                                                                                                     if (() {
-                                                                                                                          if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && (cartItemsListItem.productPickupInfo.status == 'Ready to Pickup')) {
+                                                                                                                          if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productMainType == 'custom') && (cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                             return true;
-                                                                                                                          } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && (cartItemsListItem.productPickupInfo.status == 'Ready to Pickup')) {
+                                                                                                                          } else if ((valueOrDefault(currentUserDocument?.userRole, '') == 'SuperAdmin') && (columnOrdersRecord.paymentStatus == 'CAPTURED') && (cartItemsListItem.productStockInfo.isPreferredVendor == false) && (cartItemsListItem.productPickupInfo.status == 'Ready to Pickup') && (functions.isProductInDeliveryList(cartItemsListItem, columnOrdersRecord.deliveryInfoList.toList()) == false)) {
                                                                                                                             return true;
                                                                                                                           } else {
                                                                                                                             return false;
                                                                                                                           }
-                                                                                                                        }() &&
-                                                                                                                        responsiveVisibility(
-                                                                                                                          context: context,
-                                                                                                                          phone: false,
-                                                                                                                          tablet: false,
-                                                                                                                          tabletLandscape: false,
-                                                                                                                          desktop: false,
-                                                                                                                        ))
+                                                                                                                        }())
                                                                                                                       Padding(
                                                                                                                         padding: EdgeInsetsDirectional.fromSTEB(5.0, 0.0, 5.0, 0.0),
                                                                                                                         child: AuthUserStreamWidget(
@@ -4972,35 +5283,41 @@ class _OrderDetailsWidgetState extends State<OrderDetailsWidget> {
                                                                                   children: [
                                                                                     FFButtonWidget(
                                                                                       onPressed: () async {
-                                                                                        await orderReturnReturnRequestsRecord.reference.update(createReturnRequestsRecordData(
-                                                                                          updatedAt: getCurrentTimestamp,
-                                                                                          approverInfo: createApproverInfoStruct(
-                                                                                            userEmail: currentUserEmail,
-                                                                                            userRef: currentUserReference,
-                                                                                            uid: currentUserUid,
-                                                                                            userName: currentUserDisplayName,
-                                                                                            userRole: valueOrDefault(currentUserDocument?.userRole, ''),
-                                                                                            clearUnsetFields: false,
-                                                                                          ),
-                                                                                        ));
-                                                                                        ScaffoldMessenger.of(context).showSnackBar(
-                                                                                          SnackBar(
-                                                                                            content: Text(
-                                                                                              'Return approved',
-                                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                    ),
-                                                                                                    color: FlutterFlowTheme.of(context).primaryText,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FlutterFlowTheme.of(context).bodyMedium.fontWeight,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                                                                                        final result =
+                                                                                            await createShopperReturnPickup(
+                                                                                          orderReturnReturnRequestsRecord,
+                                                                                        );
+                                                                                        await showDialog(
+                                                                                          context:
+                                                                                              context,
+                                                                                          builder:
+                                                                                              (alertDialogContext) {
+                                                                                            return WebViewAware(
+                                                                                              child:
+                                                                                                  AlertDialog(
+                                                                                                content:
+                                                                                                    Text(
+                                                                                                  shopperReturnApproveMessage(
+                                                                                                    succeeded:
+                                                                                                        result.succeeded,
+                                                                                                    message:
+                                                                                                        result.message,
+                                                                                                    pickupOtp:
+                                                                                                        result.pickupOtp,
                                                                                                   ),
-                                                                                            ),
-                                                                                            duration: Duration(milliseconds: 4000),
-                                                                                            backgroundColor: FlutterFlowTheme.of(context).secondary,
-                                                                                          ),
+                                                                                                ),
+                                                                                                actions: [
+                                                                                                  TextButton(
+                                                                                                    onPressed: () =>
+                                                                                                        Navigator.pop(
+                                                                                                            alertDialogContext),
+                                                                                                    child:
+                                                                                                        Text('Ok'),
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ),
+                                                                                            );
+                                                                                          },
                                                                                         );
                                                                                       },
                                                                                       text: FFLocalizations.of(context).getText(

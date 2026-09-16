@@ -26,6 +26,7 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
     int? packageCount,
     DateTime? preferedDate,
     String? notes,
+    String? pickupOtp,
     FirestoreUtilData firestoreUtilData = const FirestoreUtilData(),
   })  : _partnerId = partnerId,
         _deliveryId = deliveryId,
@@ -44,6 +45,7 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         _packageCount = packageCount,
         _preferedDate = preferedDate,
         _notes = notes,
+        _pickupOtp = pickupOtp,
         super(firestoreUtilData);
 
   // "partner_id" field.
@@ -189,6 +191,13 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
 
   bool hasNotes() => _notes != null;
 
+  // "pickup_otp" field.
+  String? _pickupOtp;
+  String get pickupOtp => _pickupOtp ?? '';
+  set pickupOtp(String? val) => _pickupOtp = val;
+
+  bool hasPickupOtp() => _pickupOtp != null;
+
   static DeliveryInfoStruct fromMap(Map<String, dynamic> data) =>
       DeliveryInfoStruct(
         partnerId: data['partner_id'] as String?,
@@ -215,6 +224,7 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         packageCount: castToType<int>(data['packageCount']),
         preferedDate: data['preferedDate'] as DateTime?,
         notes: data['notes'] as String?,
+        pickupOtp: data['pickup_otp'] as String?,
       );
 
   static DeliveryInfoStruct? maybeFromMap(dynamic data) => data is Map
@@ -239,6 +249,7 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         'packageCount': _packageCount,
         'preferedDate': _preferedDate,
         'notes': _notes,
+        'pickup_otp': _pickupOtp,
       }.withoutNulls;
 
   @override
@@ -310,6 +321,10 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         ),
         'notes': serializeParam(
           _notes,
+          ParamType.String,
+        ),
+        'pickup_otp': serializeParam(
+          _pickupOtp,
           ParamType.String,
         ),
       }.withoutNulls;
@@ -404,6 +419,11 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
           ParamType.String,
           false,
         ),
+        pickupOtp: deserializeParam(
+          data['pickup_otp'],
+          ParamType.String,
+          false,
+        ),
       );
 
   static DeliveryInfoStruct fromAlgoliaData(Map<String, dynamic> data) =>
@@ -495,6 +515,11 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
           ParamType.String,
           false,
         ),
+        pickupOtp: convertAlgoliaParam(
+          data['pickup_otp'],
+          ParamType.String,
+          false,
+        ),
         firestoreUtilData: FirestoreUtilData(
           clearUnsetFields: false,
           create: true,
@@ -524,7 +549,8 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         weightUnit == other.weightUnit &&
         packageCount == other.packageCount &&
         preferedDate == other.preferedDate &&
-        notes == other.notes;
+        notes == other.notes &&
+        pickupOtp == other.pickupOtp;
   }
 
   @override
@@ -545,7 +571,8 @@ class DeliveryInfoStruct extends FFFirebaseStruct {
         weightUnit,
         packageCount,
         preferedDate,
-        notes
+        notes,
+        pickupOtp,
       ]);
 }
 
@@ -566,6 +593,7 @@ DeliveryInfoStruct createDeliveryInfoStruct({
   int? packageCount,
   DateTime? preferedDate,
   String? notes,
+  String? pickupOtp,
   Map<String, dynamic> fieldValues = const {},
   bool clearUnsetFields = true,
   bool create = false,
@@ -590,6 +618,7 @@ DeliveryInfoStruct createDeliveryInfoStruct({
       packageCount: packageCount,
       preferedDate: preferedDate,
       notes: notes,
+      pickupOtp: pickupOtp,
       firestoreUtilData: FirestoreUtilData(
         clearUnsetFields: clearUnsetFields,
         create: create,

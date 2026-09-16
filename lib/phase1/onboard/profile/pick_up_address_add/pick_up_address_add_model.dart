@@ -114,53 +114,33 @@ class PickUpAddressAddModel extends FlutterFlowModel<PickUpAddressAddWidget> {
     return null;
   }
 
-  // State field(s) for Region widget.
+  // State field(s) for Governorate widget.
   FocusNode? regionFocusNode;
   TextEditingController? regionTextController;
   String? Function(BuildContext, String?)? regionTextControllerValidator;
   String? _regionTextControllerValidator(BuildContext context, String? val) {
     if (val == null || val.isEmpty) {
-      return FFLocalizations.of(context).getText(
-        '8wcfk7yw' /* Region  is required */,
-      );
-    }
-
-    if (val.length < 2) {
-      return FFLocalizations.of(context).getText(
-        '9l6fppyl' /* Minimum 2 characters are requi... */,
-      );
+      return null;
     }
     if (val.length > 50) {
       return FFLocalizations.of(context).getText(
         'z9id15z4' /* Maximum 50 characters are requ... */,
       );
     }
-
     return null;
   }
 
   // State field(s) for Country widget.
   String? countryValue;
   FormFieldController<String>? countryValueController;
-  // State field(s) for PostalCode widget.
-  FocusNode? postalCodeFocusNode;
-  TextEditingController? postalCodeTextController;
-  String? Function(BuildContext, String?)? postalCodeTextControllerValidator;
-  String? _postalCodeTextControllerValidator(
-      BuildContext context, String? val) {
-    if (val == null || val.isEmpty) {
-      return FFLocalizations.of(context).getText(
-        '6jqdhx4m' /* Postal Code is required */,
-      );
-    }
-
-    if (!RegExp('^\\d{3,5}\$').hasMatch(val)) {
-      return FFLocalizations.of(context).getText(
-        'z4ssnbc5' /* Invalid forrmat */,
-      );
-    }
-    return null;
-  }
+  // State field(s) for Building widget.
+  FocusNode? buildingFocusNode;
+  TextEditingController? buildingTextController;
+  String? Function(BuildContext, String?)? buildingTextControllerValidator;
+  // State field(s) for Block widget.
+  FocusNode? blockFocusNode;
+  TextEditingController? blockTextController;
+  String? Function(BuildContext, String?)? blockTextControllerValidator;
 
   // State field(s) for GoogleMap widget.
   LatLng? googleMapsCenter;
@@ -175,7 +155,6 @@ class PickUpAddressAddModel extends FlutterFlowModel<PickUpAddressAddWidget> {
     addressTextControllerValidator = _addressTextControllerValidator;
     cityTextControllerValidator = _cityTextControllerValidator;
     regionTextControllerValidator = _regionTextControllerValidator;
-    postalCodeTextControllerValidator = _postalCodeTextControllerValidator;
     themeStatusCheckerModel =
         createModel(context, () => ThemeStatusCheckerModel());
   }
@@ -197,8 +176,11 @@ class PickUpAddressAddModel extends FlutterFlowModel<PickUpAddressAddWidget> {
     regionFocusNode?.dispose();
     regionTextController?.dispose();
 
-    postalCodeFocusNode?.dispose();
-    postalCodeTextController?.dispose();
+    buildingFocusNode?.dispose();
+    buildingTextController?.dispose();
+
+    blockFocusNode?.dispose();
+    blockTextController?.dispose();
 
     themeStatusCheckerModel.dispose();
   }

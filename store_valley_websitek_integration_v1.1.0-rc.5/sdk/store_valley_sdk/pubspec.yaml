@@ -1,0 +1,17 @@
+name: store_valley_sdk
+description: A private Dart package containing the Store Valley Freezed data models for integration into Websitek's Flutter application.
+version: 1.1.0-rc.5
+publish_to: none
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+
+dev_dependencies:
+  build_runner: ^2.4.0
+  freezed: ^3.0.0
+  json_serializable: ^6.8.0
+  test: ^1.25.0

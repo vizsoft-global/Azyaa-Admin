@@ -127,6 +127,11 @@ class InventoryRecord extends FirestoreRecord {
   bool get notifyDesigner => _notifyDesigner ?? false;
   bool hasNotifyDesigner() => _notifyDesigner != null;
 
+  // "available_for_order" field.
+  int? _availableForOrder;
+  int get availableForOrder => _availableForOrder ?? 0;
+  bool hasAvailableForOrder() => _availableForOrder != null;
+
   void _initializeFields() {
     _createdAt = snapshotData['created_at'] as DateTime?;
     _updatedAt = snapshotData['updated_at'] as DateTime?;
@@ -152,6 +157,7 @@ class InventoryRecord extends FirestoreRecord {
     _productSku = snapshotData['product_sku'] as String?;
     _productType = snapshotData['product_type'] as String?;
     _notifyDesigner = snapshotData['notify_designer'] as bool?;
+    _availableForOrder = castToType<int>(snapshotData['available_for_order']);
   }
 
   static CollectionReference get collection =>
@@ -248,6 +254,11 @@ class InventoryRecord extends FirestoreRecord {
           'product_sku': snapshot.data['product_sku'],
           'product_type': snapshot.data['product_type'],
           'notify_designer': snapshot.data['notify_designer'],
+          'available_for_order': convertAlgoliaParam(
+            snapshot.data['available_for_order'],
+            ParamType.int,
+            false,
+          ),
         },
         InventoryRecord.collection.doc(snapshot.objectID),
       );
@@ -306,6 +317,7 @@ Map<String, dynamic> createInventoryRecordData({
   String? productSku,
   String? productType,
   bool? notifyDesigner,
+  int? availableForOrder,
 }) {
   final firestoreData = mapToFirestore(
     <String, dynamic>{
@@ -331,6 +343,7 @@ Map<String, dynamic> createInventoryRecordData({
       'product_sku': productSku,
       'product_type': productType,
       'notify_designer': notifyDesigner,
+      'available_for_order': availableForOrder,
     }.withoutNulls,
   );
 
@@ -363,7 +376,8 @@ class InventoryRecordDocumentEquality implements Equality<InventoryRecord> {
         e1?.enquiryRaisedRef == e2?.enquiryRaisedRef &&
         e1?.productSku == e2?.productSku &&
         e1?.productType == e2?.productType &&
-        e1?.notifyDesigner == e2?.notifyDesigner;
+        e1?.notifyDesigner == e2?.notifyDesigner &&
+        e1?.availableForOrder == e2?.availableForOrder;
   }
 
   @override
@@ -389,7 +403,8 @@ class InventoryRecordDocumentEquality implements Equality<InventoryRecord> {
         e?.enquiryRaisedRef,
         e?.productSku,
         e?.productType,
-        e?.notifyDesigner
+        e?.notifyDesigner,
+        e?.availableForOrder
       ]);
 
   @override

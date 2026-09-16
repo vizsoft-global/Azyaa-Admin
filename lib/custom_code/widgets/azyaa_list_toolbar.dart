@@ -152,6 +152,37 @@ class AzyaaToolbarButtons {
     );
   }
 
+  static Widget refreshWarehouse({
+    required BuildContext context,
+    required VoidCallback? onPressed,
+    required bool isRefreshing,
+    String label = 'Refresh warehouse stock',
+  }) {
+    return FFButtonWidget(
+      onPressed: onPressed,
+      text: isRefreshing ? 'Refreshing...' : label,
+      icon: const Icon(Icons.warehouse_outlined, size: 18.0),
+      options: FFButtonOptions(
+        height: 40.0,
+        padding: const EdgeInsetsDirectional.fromSTEB(16.0, 0.0, 16.0, 0.0),
+        iconPadding: EdgeInsetsDirectional.zero,
+        color: FlutterFlowTheme.of(context).secondaryBackground,
+        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+              font: GoogleFonts.inter(fontWeight: FontWeight.w500),
+              color: FlutterFlowTheme.of(context).primaryText,
+              fontSize: 13.0,
+              letterSpacing: 0.0,
+              fontWeight: FontWeight.w500,
+            ),
+        elevation: 0.0,
+        borderSide: BorderSide(
+          color: FlutterFlowTheme.of(context).border,
+        ),
+        borderRadius: BorderRadius.circular(8.0),
+      ),
+    );
+  }
+
   static Widget reset({
     required BuildContext context,
     required VoidCallback onPressed,

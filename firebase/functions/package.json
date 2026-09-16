@@ -10,6 +10,7 @@
     "axios": "1.16.1",
     "razorpay": "^2.8.4",
     "qs": "^6.7.0",
+    "cors": "^2.8.5",
     "@onesignal/node-onesignal": "^2.0.1-beta2",
     "@langchain/core": "^0.3.19",
     "@langchain/langgraph": "^0.2.23",
@@ -30,7 +31,7 @@
     "compile": "cp ../../tsconfig.template.json ./tsconfig-compile.json && tsc --project tsconfig-compile.json"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "private": true
 }

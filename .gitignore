@@ -1,2 +1,13 @@
 # Graphify knowledge graph output (AST-only, regenerated locally)
 graphify-out/
+
+build/
+
+.dart_tool/
+
+firebase/custom_cloud_functions/node_modules/
+firebase/custom_cloud_functions/.env
+firebase/custom_cloud_functions/.env.*
+!firebase/custom_cloud_functions/.env.example
+
+firebase/functions/node_modules/

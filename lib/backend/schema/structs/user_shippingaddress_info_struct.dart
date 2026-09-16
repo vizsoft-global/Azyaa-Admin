@@ -22,6 +22,8 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
     String? country,
     LatLng? latLong,
     String? countryISO,
+    String? building,
+    String? block,
     FirestoreUtilData firestoreUtilData = const FirestoreUtilData(),
   })  : _shippingEmail = shippingEmail,
         _shippingPhone = shippingPhone,
@@ -37,6 +39,8 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         _country = country,
         _latLong = latLong,
         _countryISO = countryISO,
+        _building = building,
+        _block = block,
         super(firestoreUtilData);
 
   // "shipping_email" field.
@@ -142,6 +146,20 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
 
   bool hasCountryISO() => _countryISO != null;
 
+  // "building" field.
+  String? _building;
+  String get building => _building ?? '';
+  set building(String? val) => _building = val;
+
+  bool hasBuilding() => _building != null;
+
+  // "block" field.
+  String? _block;
+  String get block => _block ?? '';
+  set block(String? val) => _block = val;
+
+  bool hasBlock() => _block != null;
+
   static UserShippingaddressInfoStruct fromMap(Map<String, dynamic> data) =>
       UserShippingaddressInfoStruct(
         shippingEmail: data['shipping_email'] as String?,
@@ -159,6 +177,8 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         country: data['country'] as String?,
         latLong: data['lat_long'] as LatLng?,
         countryISO: data['countryISO'] as String?,
+        building: data['building'] as String?,
+        block: data['block'] as String?,
       );
 
   static UserShippingaddressInfoStruct? maybeFromMap(dynamic data) =>
@@ -181,6 +201,8 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         'country': _country,
         'lat_long': _latLong,
         'countryISO': _countryISO,
+        'building': _building,
+        'block': _block,
       }.withoutNulls;
 
   @override
@@ -239,6 +261,14 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         ),
         'countryISO': serializeParam(
           _countryISO,
+          ParamType.String,
+        ),
+        'building': serializeParam(
+          _building,
+          ParamType.String,
+        ),
+        'block': serializeParam(
+          _block,
           ParamType.String,
         ),
       }.withoutNulls;
@@ -313,6 +343,16 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         ),
         countryISO: deserializeParam(
           data['countryISO'],
+          ParamType.String,
+          false,
+        ),
+        building: deserializeParam(
+          data['building'],
+          ParamType.String,
+          false,
+        ),
+        block: deserializeParam(
+          data['block'],
           ParamType.String,
           false,
         ),
@@ -391,6 +431,16 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
           ParamType.String,
           false,
         ),
+        building: convertAlgoliaParam(
+          data['building'],
+          ParamType.String,
+          false,
+        ),
+        block: convertAlgoliaParam(
+          data['block'],
+          ParamType.String,
+          false,
+        ),
         firestoreUtilData: FirestoreUtilData(
           clearUnsetFields: false,
           create: true,
@@ -416,7 +466,9 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         postalCode == other.postalCode &&
         country == other.country &&
         latLong == other.latLong &&
-        countryISO == other.countryISO;
+        countryISO == other.countryISO &&
+        building == other.building &&
+        block == other.block;
   }
 
   @override
@@ -434,7 +486,9 @@ class UserShippingaddressInfoStruct extends FFFirebaseStruct {
         postalCode,
         country,
         latLong,
-        countryISO
+        countryISO,
+        building,
+        block,
       ]);
 }
 
@@ -453,6 +507,8 @@ UserShippingaddressInfoStruct createUserShippingaddressInfoStruct({
   String? country,
   LatLng? latLong,
   String? countryISO,
+  String? building,
+  String? block,
   Map<String, dynamic> fieldValues = const {},
   bool clearUnsetFields = true,
   bool create = false,
@@ -473,6 +529,8 @@ UserShippingaddressInfoStruct createUserShippingaddressInfoStruct({
       country: country,
       latLong: latLong,
       countryISO: countryISO,
+      building: building,
+      block: block,
       firestoreUtilData: FirestoreUtilData(
         clearUnsetFields: clearUnsetFields,
         create: create,

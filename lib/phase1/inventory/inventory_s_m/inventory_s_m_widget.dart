@@ -1,6 +1,12 @@
 import '/auth/firebase_auth/auth_util.dart';
 import '/backend/api_requests/api_calls.dart';
 import '/backend/backend.dart';
+import '/backend/store_valley/inventory_request_type.dart';
+import '/backend/store_valley/restock_pickup_batch.dart';
+import '/backend/store_valley/restock_request_origin.dart';
+import '/backend/store_valley/store_valley_config.dart';
+import '/backend/store_valley/store_valley_intake_tracking.dart';
+import '/backend/store_valley/store_valley_restock_flow.dart';
 import '/components/theme_status_checker_widget.dart';
 import '/flutter_flow/flutter_flow_choice_chips.dart';
 import '/flutter_flow/flutter_flow_data_table.dart';
@@ -16,15 +22,19 @@ import '/phase1/inventory/enquiry_view/enquiry_view_widget.dart';
 import '/phase1/inventory/new_request_add/new_request_add_widget.dart';
 import '/phase1/inventory/request_accept/request_accept_widget.dart';
 import '/phase1/inventory/request_popup_option/request_popup_option_widget.dart';
+import '/phase1/inventory/restock_pickup_request/restock_pickup_request_widget.dart';
 import '/phase1/inventory/timeline_for_inventory/timeline_for_inventory_widget.dart';
 import '/phase1/notification_in_app/notificatio_alert/notificatio_alert_widget.dart';
 import '/phase1/order/empty/empty_widget.dart';
 import '/flutter_flow/custom_functions.dart' as functions;
+import '/flutter_flow/product_thumb_url.dart';
 import '/index.dart';
 import 'package:aligned_dialog/aligned_dialog.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:webviewx_plus/webviewx_plus.dart';
@@ -70,6 +80,672 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
     _model.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _designerReadyToPickup(
+    InventorymovementlogRecord log,
+  ) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (alertDialogContext) {
+            return WebViewAware(
+              child: AlertDialog(
+                content: Text(FFLocalizations.of(context).getVariableText(
+                  enText: 'Mark this restock as ready to pickup?',
+                  arText: 'هل تريد تعيين إعادة المخزون كجاهز للاستلام؟',
+                )),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(alertDialogContext, false),
+                    child: Text(FFLocalizations.of(context).getVariableText(
+                      enText: 'Cancel',
+                      arText: 'يلغي',
+                    )),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(alertDialogContext, true),
+                    child: Text(FFLocalizations.of(context).getVariableText(
+                      enText: 'Confirm',
+                      arText: 'يتأكد',
+                    )),
+                  ),
+                ],
+              ),
+            );
+          },
+        ) ??
+        false;
+    if (!confirmed) {
+      return;
+    }
+    final result = await markReadyAndCreateRestockIntake(log);
+    if (!result.succeeded) {
+      await showDialog(
+        context: context,
+        builder: (alertDialogContext) {
+          return WebViewAware(
+            child: AlertDialog(
+              content: Text(result.message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(alertDialogContext),
+                  child: const Text('Ok'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+    safeSetState(() {});
+  }
+
+  List<InventorymovementlogRecord> _readyRestockPickupLogs(
+    List<InventorymovementlogRecord> logs, {
+    InventorymovementlogRecord? selected,
+  }) {
+    final byId = <String, InventorymovementlogRecord>{
+      for (final log in logs) log.reference.id: log,
+    };
+    if (selected != null) {
+      byId[selected.reference.id] = selected;
+    }
+    final readyIds = logs
+        .where(
+          (log) =>
+              RestockPickupBatch.isReadyRestock(
+                requestType: log.requestInfo.requestType,
+                fulfillStatus: log.requestInfo.fulfillStatus,
+              ) &&
+              log.designerUid == currentUserUid,
+        )
+        .map((log) => log.reference.id)
+        .toList();
+    final mergedIds = RestockPickupBatch.mergeSelectedReady(
+      readyIds: readyIds,
+      selectedId: selected?.reference.id ?? '',
+      selectedIsReady: selected != null &&
+          RestockPickupBatch.isReadyRestock(
+            requestType: selected.requestInfo.requestType,
+            fulfillStatus: selected.requestInfo.fulfillStatus,
+          ),
+    );
+    return [
+      for (final id in mergedIds)
+        if (byId[id] != null) byId[id]!,
+    ];
+  }
+
+  Future<void> _openRestockPickupRequest(
+    List<InventorymovementlogRecord> logs, {
+    InventorymovementlogRecord? selected,
+  }) async {
+    await showDialog<bool>(
+      barrierColor: const Color(0x7B000000),
+      barrierDismissible: false,
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          elevation: 0,
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          alignment:
+              AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+          child: WebViewAware(
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(dialogContext).unfocus();
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: SizedBox(
+                width: 600.0,
+                child: RestockPickupRequestWidget(
+                  readyLogs: _readyRestockPickupLogs(logs, selected: selected),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    safeSetState(() {});
+  }
+
+  bool _designerMustAccept(InventorymovementlogRecord log) {
+    return RestockRequestOrigin.designerMustAccept(
+      requestType: log.requestInfo.requestType,
+      raisedBy: log.requestInfo.raisedBy,
+      inventoryRequestId: log.requestInfo.inventoryRequestId,
+      adminPreferredDate: log.requestInfo.adminPreferredDate,
+    );
+  }
+
+  Widget _restockPickupOtpRow(InventorymovementlogRecord log) {
+    if (log.requestInfo.requestType != 'Restock') {
+      return const SizedBox.shrink();
+    }
+    final label = StoreValleyIntakeTracking.otpRowLabel(
+      pickupOtp: log.requestDeliveryInfo.pickupOtp,
+      fulfillStatus: log.requestInfo.fulfillStatus,
+      otpVerificationStatus: log.requestDeliveryInfo.status,
+    );
+    if (label == null) {
+      return const SizedBox.shrink();
+    }
+    final showCopy = label.startsWith('OTP ') && label != 'OTP verified';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          style: FlutterFlowTheme.of(context).bodyMedium.override(
+                font: GoogleFonts.inter(
+                  fontWeight: FontWeight.w600,
+                  fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                ),
+                fontSize: 11.0,
+                letterSpacing: 0.0,
+                fontWeight: FontWeight.w600,
+                fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+              ),
+        ),
+        if (showCopy)
+          InkWell(
+            splashColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            onTap: () async {
+              await Clipboard.setData(
+                ClipboardData(text: log.requestDeliveryInfo.pickupOtp),
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('OTP Copied'),
+                  duration: Duration(milliseconds: 2500),
+                  backgroundColor: FlutterFlowTheme.of(context).secondary,
+                ),
+              );
+            },
+            child: Icon(
+              Icons.content_copy_rounded,
+              color: FFAppState().theme.themeMain.primary,
+              size: 14.0,
+            ),
+          ),
+      ].divide(SizedBox(width: 4.0)),
+    );
+  }
+
+  String _requestFulfillLabel(InventorymovementlogRecord log) {
+    if (log.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') {
+      return 'Shipping';
+    }
+    if (log.requestInfo.fulfillStatus == 'Cancelled') {
+      return 'Cancelled';
+    }
+    if (StoreValleyIntakeTracking.isFulfillComplete(
+        log.requestInfo.fulfillStatus)) {
+      return 'Completed';
+    }
+    return log.requestInfo.fulfillStatus;
+  }
+
+  String _enquiryFulfillLabel(InventorymovementlogRecord log) {
+    if (log.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') {
+      return 'Enquiry Shipping';
+    }
+    if (log.enquiryInfo.fulfillStatus == 'Received') {
+      return 'Enquiry Closed';
+    }
+    return log.enquiryInfo.fulfillStatus;
+  }
+
+  Color _requestFulfillColor(String status) {
+    if (status == 'Processing') {
+      return FlutterFlowTheme.of(context).azyaaProcessing;
+    }
+    if (status == 'Ready to pickup') {
+      return FlutterFlowTheme.of(context).azyaaAccepted;
+    }
+    return FlutterFlowTheme.of(context).tertiary;
+  }
+
+  bool _showRequestFulfillTracker(InventorymovementlogRecord log) {
+    return (log.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') ||
+        StoreValleyIntakeTracking.isFulfillComplete(
+            log.requestInfo.fulfillStatus) ||
+        ((log.requestDeliveryInfo.deliveryRef != null) &&
+            (log.requestInfo.fulfillStatus == 'Cancelled'));
+  }
+
+  bool _showEnquiryFulfillTracker(InventorymovementlogRecord log) {
+    return (log.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') ||
+        (log.enquiryInfo.fulfillStatus == 'Received') ||
+        ((log.enquiryDeliveryInfo.deliveryRef != null) &&
+            (log.enquiryInfo.fulfillStatus == 'Cancelled'));
+  }
+
+  Future<void> _openRequestFulfillTracker(
+      InventorymovementlogRecord log) async {
+    if (log.requestInfo.requestType == 'Restock') {
+      await _openRestockIntakeTracker(log);
+      return;
+    }
+    _model.logisticsResponseDoc = await queryLogisticsResponseRecordOnce(
+      queryBuilder: (logisticsResponseRecord) =>
+          logisticsResponseRecord.where(
+        'id',
+        isEqualTo: log.requestDeliveryInfo.deliveryId,
+      ),
+      singleRecord: true,
+    ).then((s) => s.firstOrNull);
+    await showAlignedDialog(
+      barrierColor: Color(0x7B000000),
+      context: context,
+      isGlobal: false,
+      avoidOverflow: false,
+      targetAnchor: AlignmentDirectional(-20.0, 13.0)
+          .resolve(Directionality.of(context)),
+      followerAnchor:
+          AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+      builder: (dialogContext) {
+        return Material(
+          color: Colors.transparent,
+          child: WebViewAware(
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(dialogContext).unfocus();
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: Container(
+                height: 300.0,
+                child: TimelineForInventoryWidget(
+                  logisticsDoc: _model.logisticsResponseDoc!,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    safeSetState(() {});
+  }
+
+  Future<void> _openEnquiryFulfillTracker(
+      InventorymovementlogRecord log) async {
+    _model.logisticsResponseenquiryDoc =
+        await queryLogisticsResponseRecordOnce(
+      queryBuilder: (logisticsResponseRecord) =>
+          logisticsResponseRecord.where(
+        'id',
+        isEqualTo: log.enquiryDeliveryInfo.deliveryId,
+      ),
+      singleRecord: true,
+    ).then((s) => s.firstOrNull);
+    await showDialog(
+      barrierColor: Color(0x7B000000),
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          elevation: 0,
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          alignment:
+              AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+          child: WebViewAware(
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(dialogContext).unfocus();
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: Container(
+                height: 300.0,
+                child: TimelineForInventoryWidget(
+                  logisticsDoc: _model.logisticsResponseenquiryDoc!,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    safeSetState(() {});
+  }
+
+  Widget _fulfillStatusCell(InventorymovementlogRecord log) {
+    final isEnquiry = log.enquiryInfo.enquiryId != '';
+    return SizedBox(
+      width: double.infinity,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  isEnquiry
+                      ? _enquiryFulfillLabel(log)
+                      : _requestFulfillLabel(log),
+                  maxLines: 1,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                  style: FlutterFlowTheme.of(context).bodyMedium.override(
+                        font: GoogleFonts.inter(
+                          fontWeight: FontWeight.w500,
+                          fontStyle:
+                              FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                        ),
+                        color: isEnquiry
+                            ? FlutterFlowTheme.of(context).primaryText
+                            : _requestFulfillColor(
+                                log.requestInfo.fulfillStatus),
+                        fontSize: 12.0,
+                        letterSpacing: 0.0,
+                        fontWeight: FontWeight.w500,
+                        fontStyle:
+                            FlutterFlowTheme.of(context).bodyMedium.fontStyle,
+                      ),
+                ),
+              ),
+              if (!isEnquiry && _showRequestFulfillTracker(log))
+                InkWell(
+                  splashColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  onTap: () async {
+                    await _openRequestFulfillTracker(log);
+                  },
+                  child: Icon(
+                    FFIcons.kpickup,
+                    color: FFAppState().theme.themeMain.primaryText,
+                    size: 18.0,
+                  ),
+                ),
+              if (isEnquiry && _showEnquiryFulfillTracker(log))
+                InkWell(
+                  splashColor: Colors.transparent,
+                  focusColor: Colors.transparent,
+                  hoverColor: Colors.transparent,
+                  highlightColor: Colors.transparent,
+                  onTap: () async {
+                    await _openEnquiryFulfillTracker(log);
+                  },
+                  child: Icon(
+                    FFIcons.kpickup,
+                    color: FlutterFlowTheme.of(context).primaryText,
+                    size: 24.0,
+                  ),
+                ),
+            ].divide(SizedBox(width: 4.0)),
+          ),
+          if (!isEnquiry) _restockPickupOtpRow(log),
+        ],
+      ),
+    );
+  }
+
+  Future<String> _resolveRestockTrackingId(InventorymovementlogRecord log) async {
+    var tracking = log.requestDeliveryInfo.deliveryTrackingId;
+    if (tracking.isEmpty && log.requestDeliveryInfo.deliveryRef != null) {
+      try {
+        final delivery = await DeliveryRecord.getDocumentOnce(
+          log.requestDeliveryInfo.deliveryRef!,
+        );
+        tracking = delivery.deliveryTrackingId;
+      } catch (_) {}
+    }
+    return StoreValleyIntakeTracking.resolveTrackingId(
+      deliveryTrackingId: tracking,
+      inventoryRequestId: log.requestInfo.inventoryRequestId,
+    );
+  }
+
+  void _showTrackingLoadingDialog() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: const Color(0x7B000000),
+      builder: (dialogContext) {
+        return Dialog(
+          elevation: 0,
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          alignment:
+              AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
+          child: WebViewAware(
+            child: Container(
+              width: 280.0,
+              padding: const EdgeInsets.all(24.0),
+              decoration: BoxDecoration(
+                color: FlutterFlowTheme.of(context).secondaryBackground,
+                borderRadius: BorderRadius.circular(16.0),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      FlutterFlowTheme.of(context).primary,
+                    ),
+                  ),
+                  const SizedBox(height: 16.0),
+                  Text(
+                    'Loading tracking...',
+                    textAlign: TextAlign.center,
+                    style: FlutterFlowTheme.of(context).bodyMedium.override(
+                          font: GoogleFonts.inter(
+                            fontWeight: FontWeight.w500,
+                          ),
+                          letterSpacing: 0.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _closeTrackingLoadingDialog() {
+    if (!mounted) {
+      return;
+    }
+    final navigator = Navigator.of(context, rootNavigator: true);
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+  }
+
+  Future<LogisticsResponseRecord?> _lookupRestockLogistics(String trackingId) async {
+    if (trackingId.isEmpty) {
+      return null;
+    }
+    const fields = ['swftTrackID', 'request_id', 'id', 'external_request_id'];
+    for (final field in fields) {
+      final doc = await queryLogisticsResponseRecordOnce(
+        queryBuilder: (logisticsResponseRecord) => logisticsResponseRecord.where(
+          field,
+          isEqualTo: trackingId,
+        ),
+        singleRecord: true,
+      ).then((s) => s.firstOrNull);
+      if (doc != null) {
+        return doc;
+      }
+    }
+    return null;
+  }
+
+  Map<String, String> _intakeFieldsFromTrack(ApiCallResponse response) {
+    final body = response.jsonBody;
+    if (body is! Map) {
+      return const {};
+    }
+    final map = Map<String, dynamic>.from(body);
+    final data = map['data'];
+    final nested = data is Map ? Map<String, dynamic>.from(data) : const <String, dynamic>{};
+    final otp = map['otp_verification'];
+    final otpStatus = map['otp_verification_status'] ??
+        nested['otp_verification_status'] ??
+        (otp is Map ? otp['status'] : null);
+    return {
+      'status': (map['status'] ?? nested['status'] ?? '').toString(),
+      'request_id': (map['request_id'] ?? nested['request_id'] ?? '').toString(),
+      'external_request_id':
+          (map['external_request_id'] ?? nested['external_request_id'] ?? '')
+              .toString(),
+      'delivery_order_id':
+          (map['delivery_order_id'] ?? nested['delivery_order_id'] ?? '')
+              .toString(),
+      'otp_verification_status': (otpStatus ?? '').toString(),
+    };
+  }
+
+  Future<void> _resendRestockPickupOtp(String trackingId) async {
+    await FirebaseFunctions.instance
+        .httpsCallable(StoreValleyConfig.resendPickupOtpCallableName)
+        .call({'trackingId': trackingId});
+  }
+
+  Future<void> _openRestockIntakeTracker(InventorymovementlogRecord log) async {
+    final trackingId = await _resolveRestockTrackingId(log);
+    if (trackingId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No Store Valley tracking id'),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+      return;
+    }
+
+    _showTrackingLoadingDialog();
+    var liveStatus = '';
+    var requestId = trackingId;
+    var externalRequestId = '';
+    var deliveryOrderId = '';
+    var otpVerificationStatus = log.requestDeliveryInfo.status;
+    var getSucceeded = false;
+    LogisticsResponseRecord? logisticsDoc;
+
+    try {
+      try {
+        final track = await PrimeExpressDeliveryGroup.trackDeliveryCall.call(
+          trackID: trackingId,
+        );
+        if (track.succeeded) {
+          getSucceeded = true;
+          final fields = _intakeFieldsFromTrack(track);
+          if (fields['status']!.isNotEmpty) {
+            liveStatus = fields['status']!;
+          }
+          if (fields['request_id']!.isNotEmpty) {
+            requestId = fields['request_id']!;
+          }
+          externalRequestId = fields['external_request_id']!;
+          deliveryOrderId = fields['delivery_order_id']!;
+          if (fields['otp_verification_status']!.isNotEmpty) {
+            otpVerificationStatus = fields['otp_verification_status']!;
+          }
+        }
+      } catch (_) {}
+
+      logisticsDoc = await _lookupRestockLogistics(trackingId);
+      if (liveStatus.isEmpty) {
+        liveStatus = logisticsDoc?.status ?? logisticsDoc?.state ?? '';
+      }
+      if (externalRequestId.isEmpty) {
+        externalRequestId = logisticsDoc?.externalRequestId ?? '';
+      }
+      if (deliveryOrderId.isEmpty) {
+        deliveryOrderId = logisticsDoc?.deliveryOrderId ?? '';
+      }
+      if (otpVerificationStatus.isEmpty) {
+        otpVerificationStatus = logisticsDoc?.otpVerificationStatus ?? '';
+      }
+      if (getSucceeded && liveStatus.isNotEmpty && logisticsDoc != null) {
+        try {
+          await logisticsDoc.reference.update({
+            'status': liveStatus,
+            'state': liveStatus,
+            'updated_at': getCurrentTimestamp,
+            if (otpVerificationStatus.isNotEmpty)
+              'otp_verification_status': otpVerificationStatus,
+          });
+        } catch (_) {}
+      }
+      if (StoreValleyIntakeTracking.isComplete(liveStatus)) {
+        await markRestockIntakeCompleted(log);
+      }
+    } finally {
+      _closeTrackingLoadingDialog();
+    }
+
+    if (!mounted) {
+      return;
+    }
+    if (!getSucceeded && logisticsDoc == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to load restock intake tracking'),
+          backgroundColor: FlutterFlowTheme.of(context).error,
+        ),
+      );
+      return;
+    }
+
+    await showDialog(
+      barrierColor: Color(0x7B000000),
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          elevation: 0,
+          insetPadding: EdgeInsets.zero,
+          backgroundColor: Colors.transparent,
+          alignment: AlignmentDirectional(0.0, 0.0)
+              .resolve(Directionality.of(context)),
+          child: WebViewAware(
+            child: GestureDetector(
+              onTap: () {
+                FocusScope.of(dialogContext).unfocus();
+                FocusManager.instance.primaryFocus?.unfocus();
+              },
+              child: TimelineForInventoryWidget(
+                logisticsDoc: logisticsDoc,
+                useIntakeSteps: true,
+                liveStatus: liveStatus,
+                requestId: requestId,
+                externalRequestId: externalRequestId,
+                deliveryOrderId: deliveryOrderId,
+                pickupOtp: log.requestDeliveryInfo.pickupOtp,
+                otpVerificationStatus: otpVerificationStatus,
+                fulfillStatus: StoreValleyIntakeTracking.isComplete(liveStatus)
+                    ? 'Completed'
+                    : log.requestInfo.fulfillStatus,
+                onResendOtp: StoreValleyIntakeTracking.canResendPickupOtp(
+                  pickupOtp: log.requestDeliveryInfo.pickupOtp.isNotEmpty
+                      ? log.requestDeliveryInfo.pickupOtp
+                      : (logisticsDoc?.pickupOtp ?? ''),
+                  otpVerificationStatus: otpVerificationStatus,
+                  intakeStatus: liveStatus,
+                )
+                    ? () => _resendRestockPickupOtp(trackingId)
+                    : null,
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -510,6 +1186,76 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                       ),
                                                     ),
                                                   ),
+                                                  if (FFAppState()
+                                                          .currentUserRoleKey ==
+                                                      'designer')
+                                                    FFButtonWidget(
+                                                      onPressed: () async {
+                                                        await _openRestockPickupRequest(
+                                                          inventorInventorymovementlogRecordList,
+                                                        );
+                                                      },
+                                                      text: FFLocalizations.of(
+                                                              context)
+                                                          .getText(
+                                                        '9ov4m9sf' /* Create Pickup Request */,
+                                                      ),
+                                                      showLoadingIndicator:
+                                                          false,
+                                                      options: FFButtonOptions(
+                                                        height: 30.0,
+                                                        padding:
+                                                            EdgeInsetsDirectional
+                                                                .fromSTEB(
+                                                                    16.0,
+                                                                    0.0,
+                                                                    16.0,
+                                                                    0.0),
+                                                        iconPadding:
+                                                            EdgeInsetsDirectional
+                                                                .fromSTEB(
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0,
+                                                                    0.0),
+                                                        color:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .primary,
+                                                        textStyle:
+                                                            FlutterFlowTheme.of(
+                                                                    context)
+                                                                .bodySmall
+                                                                .override(
+                                                                  font:
+                                                                      GoogleFonts
+                                                                          .inter(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w500,
+                                                                    fontStyle: FlutterFlowTheme.of(
+                                                                            context)
+                                                                        .bodySmall
+                                                                        .fontStyle,
+                                                                  ),
+                                                                  color: Colors
+                                                                      .white,
+                                                                  letterSpacing:
+                                                                      0.0,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  fontStyle: FlutterFlowTheme.of(
+                                                                          context)
+                                                                      .bodySmall
+                                                                      .fontStyle,
+                                                                ),
+                                                        elevation: 0.0,
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(8.0),
+                                                      ),
+                                                    ),
                                                   wrapWithModel(
                                                     model: _model
                                                         .notificatioAlertModel,
@@ -1352,11 +2098,16 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     borderRadius: BorderRadius.circular(8.0),
                                                                                     child: Image.network(
                                                                                       getCORSProxyUrl(
-                                                                                        rowProductsRecord.productInfo.galleryImage.firstOrNull!,
+                                                                                        productThumbUrl(
+                                                                                          rowProductsRecord.productInfo.featureImage,
+                                                                                          rowProductsRecord.productInfo.galleryImage,
+                                                                                        ),
                                                                                       ),
                                                                                       width: 40.0,
                                                                                       height: 40.0,
                                                                                       fit: BoxFit.cover,
+                                                                                      errorBuilder: (context, error, stackTrace) =>
+                                                                                          SizedBox(width: 40.0, height: 40.0),
                                                                                     ),
                                                                                   ),
                                                                                 ),
@@ -1502,7 +2253,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            inventorymovemtItem.createdAt!,
+                                                                            inventorymovemtItem.createdAt,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -1572,7 +2323,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            inventorymovemtItem.requestInfo.adminPreferredDate!,
+                                                                            inventorymovemtItem.requestInfo.adminPreferredDate,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -1667,7 +2418,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                     headingRowHeight:
                                                                         40.0,
                                                                     dataRowHeight:
-                                                                        60.0,
+                                                                        76.0,
                                                                     columnSpacing:
                                                                         16.0,
                                                                     headingRowColor:
@@ -1999,7 +2750,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                               ),
                                                                             ),
                                                                             fixedWidth:
-                                                                                100.0,
+                                                                                240.0,
                                                                           ),
                                                                           DataColumn2(
                                                                             label:
@@ -2061,11 +2812,16 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                         borderRadius: BorderRadius.circular(8.0),
                                                                                         child: Image.network(
                                                                                           getCORSProxyUrl(
-                                                                                            rowProductsRecord.productInfo.galleryImage.firstOrNull!,
+                                                                                            productThumbUrl(
+                                                                                          rowProductsRecord.productInfo.featureImage,
+                                                                                          rowProductsRecord.productInfo.galleryImage,
+                                                                                        ),
                                                                                           ),
                                                                                           width: 40.0,
                                                                                           height: 40.0,
                                                                                           fit: BoxFit.cover,
+                                                                                          errorBuilder: (context, error, stackTrace) =>
+                                                                                              SizedBox(width: 40.0, height: 40.0),
                                                                                         ),
                                                                                       ),
                                                                                     ),
@@ -2221,8 +2977,8 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                       return 'Enquiry Closed';
                                                                                     } else if (movementListItem.enquiryInfo.enquiryId != '') {
                                                                                       return 'Enquiry';
-                                                                                    } else if (movementListItem.requestInfo.fulfillStatus == 'Received') {
-                                                                                      return 'Received';
+                                                                                    } else if (StoreValleyIntakeTracking.isFulfillComplete(movementListItem.requestInfo.fulfillStatus)) {
+                                                                                      return 'Completed';
                                                                                     } else {
                                                                                       return movementListItem.requestInfo.requestStatus;
                                                                                     }
@@ -2245,7 +3001,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 child: Text(
                                                                               dateTimeFormat(
                                                                                 "yMMMd",
-                                                                                movementListItem.requestInfo.adminPreferredDate!,
+                                                                                movementListItem.requestInfo.adminPreferredDate,
                                                                                 locale: FFLocalizations.of(context).languageCode,
                                                                               ),
                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -2267,7 +3023,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 child: Text(
                                                                               dateTimeFormat(
                                                                                 "yMMMd",
-                                                                                movementListItem.requestInfo.designerPreferredNotes!,
+                                                                                movementListItem.requestInfo.designerPreferredNotes,
                                                                                 locale: FFLocalizations.of(context).languageCode,
                                                                               ),
                                                                               style: FlutterFlowTheme.of(context).bodyMedium.override(
@@ -2285,195 +3041,41 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
                                                                                   ),
                                                                             )),
-                                                                            Column(
-                                                                              mainAxisSize: MainAxisSize.min,
-                                                                              mainAxisAlignment: MainAxisAlignment.center,
-                                                                              children: [
-                                                                                Stack(
-                                                                                  children: [
-                                                                                    if (movementListItem.enquiryInfo.enquiryId == '')
-                                                                                      Row(
-                                                                                        mainAxisSize: MainAxisSize.max,
-                                                                                        children: [
-                                                                                          Expanded(
-                                                                                            child: SelectionArea(
-                                                                                                child: Text(
-                                                                                              () {
-                                                                                                if (movementListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') {
-                                                                                                  return 'Shipping';
-                                                                                                } else if (movementListItem.requestInfo.fulfillStatus == 'Cancelled') {
-                                                                                                  return 'Cancelled';
-                                                                                                } else {
-                                                                                                  return movementListItem.requestInfo.fulfillStatus;
-                                                                                                }
-                                                                                              }(),
-                                                                                              style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                                    font: GoogleFonts.inter(
-                                                                                                      fontWeight: FontWeight.w500,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                    ),
-                                                                                                    color: () {
-                                                                                                      if (movementListItem.requestInfo.fulfillStatus == 'Processing') {
-                                                                                                        return FlutterFlowTheme.of(context).azyaaProcessing;
-                                                                                                      } else if (movementListItem.requestInfo.fulfillStatus == 'Ready to pickup') {
-                                                                                                        return FlutterFlowTheme.of(context).azyaaAccepted;
-                                                                                                      } else {
-                                                                                                        return FlutterFlowTheme.of(context).tertiary;
-                                                                                                      }
-                                                                                                    }(),
-                                                                                                    fontSize: 12.0,
-                                                                                                    letterSpacing: 0.0,
-                                                                                                    fontWeight: FontWeight.w500,
-                                                                                                    fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                  ),
-                                                                                            )),
-                                                                                          ),
-                                                                                          if ((movementListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') || (movementListItem.requestInfo.fulfillStatus == 'Received') || ((movementListItem.requestDeliveryInfo.deliveryRef != null) && (movementListItem.requestInfo.fulfillStatus == 'Cancelled')))
-                                                                                            Builder(
-                                                                                              builder: (context) => InkWell(
-                                                                                                splashColor: Colors.transparent,
-                                                                                                focusColor: Colors.transparent,
-                                                                                                hoverColor: Colors.transparent,
-                                                                                                highlightColor: Colors.transparent,
-                                                                                                onTap: () async {
-                                                                                                  _model.logisticsResponseDoc = await queryLogisticsResponseRecordOnce(
-                                                                                                    queryBuilder: (logisticsResponseRecord) => logisticsResponseRecord.where(
-                                                                                                      'id',
-                                                                                                      isEqualTo: movementListItem.requestDeliveryInfo.deliveryId,
-                                                                                                    ),
-                                                                                                    singleRecord: true,
-                                                                                                  ).then((s) => s.firstOrNull);
-                                                                                                  await showAlignedDialog(
-                                                                                                    barrierColor: Color(0x7B000000),
-                                                                                                    context: context,
-                                                                                                    isGlobal: false,
-                                                                                                    avoidOverflow: false,
-                                                                                                    targetAnchor: AlignmentDirectional(-20.0, 13.0).resolve(Directionality.of(context)),
-                                                                                                    followerAnchor: AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
-                                                                                                    builder: (dialogContext) {
-                                                                                                      return Material(
-                                                                                                        color: Colors.transparent,
-                                                                                                        child: WebViewAware(
-                                                                                                          child: GestureDetector(
-                                                                                                            onTap: () {
-                                                                                                              FocusScope.of(dialogContext).unfocus();
-                                                                                                              FocusManager.instance.primaryFocus?.unfocus();
-                                                                                                            },
-                                                                                                            child: Container(
-                                                                                                              height: 300.0,
-                                                                                                              child: TimelineForInventoryWidget(
-                                                                                                                logisticsDoc: _model.logisticsResponseDoc!,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                      );
-                                                                                                    },
-                                                                                                  );
-
-                                                                                                  safeSetState(() {});
-                                                                                                },
-                                                                                                child: Icon(
-                                                                                                  FFIcons.kpickup,
-                                                                                                  color: FFAppState().theme.themeMain.primaryText,
-                                                                                                  size: 18.0,
-                                                                                                ),
-                                                                                              ),
-                                                                                            ),
-                                                                                        ].divide(SizedBox(width: 4.0)),
-                                                                                      ),
-                                                                                    if (movementListItem.enquiryInfo.enquiryId != '')
-                                                                                      Row(
-                                                                                        mainAxisSize: MainAxisSize.max,
-                                                                                        children: [
-                                                                                          if (movementListItem.enquiryInfo.enquiryId != '')
-                                                                                            Expanded(
-                                                                                              child: Text(
-                                                                                                () {
-                                                                                                  if (movementListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') {
-                                                                                                    return 'Enquiry Shipping';
-                                                                                                  } else if (movementListItem.enquiryInfo.fulfillStatus == 'Received') {
-                                                                                                    return 'Enquiry Closed';
-                                                                                                  } else {
-                                                                                                    return movementListItem.enquiryInfo.fulfillStatus;
-                                                                                                  }
-                                                                                                }(),
-                                                                                                style: FlutterFlowTheme.of(context).bodyMedium.override(
-                                                                                                      font: GoogleFonts.inter(
-                                                                                                        fontWeight: FontWeight.w500,
-                                                                                                        fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                      ),
-                                                                                                      color: FlutterFlowTheme.of(context).primaryText,
-                                                                                                      fontSize: 12.0,
-                                                                                                      letterSpacing: 0.0,
-                                                                                                      fontWeight: FontWeight.w500,
-                                                                                                      fontStyle: FlutterFlowTheme.of(context).bodyMedium.fontStyle,
-                                                                                                    ),
-                                                                                              ),
-                                                                                            ),
-                                                                                          if ((movementListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') || (movementListItem.enquiryInfo.fulfillStatus == 'Received') || ((movementListItem.enquiryDeliveryInfo.deliveryRef != null) && (movementListItem.enquiryInfo.fulfillStatus == 'Cancelled')))
-                                                                                            Builder(
-                                                                                              builder: (context) => InkWell(
-                                                                                                splashColor: Colors.transparent,
-                                                                                                focusColor: Colors.transparent,
-                                                                                                hoverColor: Colors.transparent,
-                                                                                                highlightColor: Colors.transparent,
-                                                                                                onTap: () async {
-                                                                                                  _model.logisticsResponseenquiryDoc = await queryLogisticsResponseRecordOnce(
-                                                                                                    queryBuilder: (logisticsResponseRecord) => logisticsResponseRecord.where(
-                                                                                                      'id',
-                                                                                                      isEqualTo: movementListItem.enquiryDeliveryInfo.deliveryId,
-                                                                                                    ),
-                                                                                                    singleRecord: true,
-                                                                                                  ).then((s) => s.firstOrNull);
-                                                                                                  await showDialog(
-                                                                                                    barrierColor: Color(0x7B000000),
-                                                                                                    context: context,
-                                                                                                    builder: (dialogContext) {
-                                                                                                      return Dialog(
-                                                                                                        elevation: 0,
-                                                                                                        insetPadding: EdgeInsets.zero,
-                                                                                                        backgroundColor: Colors.transparent,
-                                                                                                        alignment: AlignmentDirectional(0.0, 0.0).resolve(Directionality.of(context)),
-                                                                                                        child: WebViewAware(
-                                                                                                          child: GestureDetector(
-                                                                                                            onTap: () {
-                                                                                                              FocusScope.of(dialogContext).unfocus();
-                                                                                                              FocusManager.instance.primaryFocus?.unfocus();
-                                                                                                            },
-                                                                                                            child: Container(
-                                                                                                              height: 300.0,
-                                                                                                              child: TimelineForInventoryWidget(
-                                                                                                                logisticsDoc: _model.logisticsResponseenquiryDoc!,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                      );
-                                                                                                    },
-                                                                                                  );
-
-                                                                                                  safeSetState(() {});
-                                                                                                },
-                                                                                                child: Icon(
-                                                                                                  FFIcons.kpickup,
-                                                                                                  color: FlutterFlowTheme.of(context).primaryText,
-                                                                                                  size: 24.0,
-                                                                                                ),
-                                                                                              ),
-                                                                                            ),
-                                                                                        ].divide(SizedBox(width: 4.0)),
-                                                                                      ),
-                                                                                  ],
-                                                                                ),
-                                                                              ],
-                                                                            ),
+                                                                            _fulfillStatusCell(movementListItem),
                                                                             SingleChildScrollView(
                                                                               scrollDirection: Axis.horizontal,
                                                                               child: Row(
                                                                                 mainAxisSize: MainAxisSize.max,
                                                                                 children: [
-                                                                                  if (movementListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned')
+                                                                                  if ((movementListItem.requestInfo.requestStatus == 'Accepted') && (movementListItem.requestInfo.fulfillStatus == 'Processing') && (movementListItem.requestInfo.requestType == 'Restock') && (FFAppState().currentUserRoleKey == 'designer'))
+                                                                                    FFButtonWidget(
+                                                                                      onPressed: () async {
+                                                                                        await _designerReadyToPickup(movementListItem);
+                                                                                      },
+                                                                                      text: FFLocalizations.of(context).getText(
+                                                                                        'aw45i9fy' /* Ready to Pickup */,
+                                                                                      ),
+                                                                                      options: FFButtonOptions(
+                                                                                        height: 30.0,
+                                                                                        padding: EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 0.0),
+                                                                                        iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                                                                        color: Color(0xFF29845A),
+                                                                                        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                                                                                              font: GoogleFonts.inter(
+                                                                                                fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                                fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                              ),
+                                                                                              color: Colors.white,
+                                                                                              fontSize: 10.0,
+                                                                                              letterSpacing: 0.0,
+                                                                                              fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                            ),
+                                                                                        elevation: 1.0,
+                                                                                        borderRadius: BorderRadius.circular(8.0),
+                                                                                      ),
+                                                                                    ),
+                                                                                  if ((movementListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') && InventoryRequestType.showLegacyNonRestockShipping(movementListItem.requestInfo.requestType))
                                                                                     FFButtonWidget(
                                                                                       onPressed: () async {
                                                                                         var confirmDialogResponse = await showDialog<bool>(
@@ -2558,7 +3160,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                         borderRadius: BorderRadius.circular(8.0),
                                                                                       ),
                                                                                     ),
-                                                                                  if (movementListItem.requestInfo.fulfillStatus == 'Ready to pickup')
+                                                                                  if ((movementListItem.requestInfo.fulfillStatus == 'Ready to pickup') && InventoryRequestType.showLegacyNonRestockShipping(movementListItem.requestInfo.requestType))
                                                                                     FFButtonWidget(
                                                                                       onPressed: () async {
                                                                                         context.pushNamed(
@@ -2598,7 +3200,39 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                         borderRadius: BorderRadius.circular(8.0),
                                                                                       ),
                                                                                     ),
-                                                                                  if (movementListItem.requestInfo.fulfillStatus != 'Received')
+                                                                                  if ((movementListItem.requestInfo.fulfillStatus == 'Ready to pickup') && (movementListItem.requestInfo.requestType == 'Restock') && (FFAppState().currentUserRoleKey == 'designer'))
+                                                                                    FFButtonWidget(
+                                                                                      onPressed: () async {
+                                                                                        await _openRestockPickupRequest(
+                                                                                          movementList,
+                                                                                          selected: movementListItem,
+                                                                                        );
+                                                                                      },
+                                                                                      text: FFLocalizations.of(context).getText(
+                                                                                        '9ov4m9sf' /* Create Pickup Request */,
+                                                                                      ),
+                                                                                      showLoadingIndicator: false,
+                                                                                      options: FFButtonOptions(
+                                                                                        height: 30.0,
+                                                                                        padding: EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 0.0),
+                                                                                        iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                                                                        color: FlutterFlowTheme.of(context).primary,
+                                                                                        textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                                                                                              font: GoogleFonts.inter(
+                                                                                                fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                                fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                              ),
+                                                                                              color: Colors.white,
+                                                                                              fontSize: 10.0,
+                                                                                              letterSpacing: 0.0,
+                                                                                              fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                              fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                            ),
+                                                                                        elevation: 1.0,
+                                                                                        borderRadius: BorderRadius.circular(8.0),
+                                                                                      ),
+                                                                                    ),
+                                                                                  if (!StoreValleyIntakeTracking.isFulfillComplete(movementListItem.requestInfo.fulfillStatus) && (movementListItem.requestInfo.fulfillStatus != 'Cancelled') && (movementListItem.requestInfo.requestStatus != 'Cancelled'))
                                                                                     FFButtonWidget(
                                                                                       onPressed: () async {
                                                                                         var _shouldSetState = false;
@@ -2840,7 +3474,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                         borderRadius: BorderRadius.circular(8.0),
                                                                                       ),
                                                                                     ),
-                                                                                  if ((movementListItem.requestInfo.fulfillStatus == 'Received') && (movementListItem.enquiryInfo.status == '') && (movementListItem.requestInfo.requestType == 'Restock'))
+                                                                                  if (StoreValleyIntakeTracking.isFulfillComplete(movementListItem.requestInfo.fulfillStatus) && (movementListItem.enquiryInfo.status == '') && (movementListItem.requestInfo.requestType == 'Restock'))
                                                                                     Builder(
                                                                                       builder: (context) => FFButtonWidget(
                                                                                         onPressed: () async {
@@ -3570,11 +4204,16 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     borderRadius: BorderRadius.circular(8.0),
                                                                                     child: Image.network(
                                                                                       getCORSProxyUrl(
-                                                                                        rowProductsRecord.productInfo.galleryImage.firstOrNull!,
+                                                                                        productThumbUrl(
+                                                                                          rowProductsRecord.productInfo.featureImage,
+                                                                                          rowProductsRecord.productInfo.galleryImage,
+                                                                                        ),
                                                                                       ),
                                                                                       width: 40.0,
                                                                                       height: 40.0,
                                                                                       fit: BoxFit.cover,
+                                                                                      errorBuilder: (context, error, stackTrace) =>
+                                                                                          SizedBox(width: 40.0, height: 40.0),
                                                                                       alignment: Alignment(0.0, 0.0),
                                                                                     ),
                                                                                   ),
@@ -3720,7 +4359,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            desginermovementListItem.createdAt!,
+                                                                            desginermovementListItem.createdAt,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -3773,7 +4412,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            desginermovementListItem.requestInfo.adminPreferredDate!,
+                                                                            desginermovementListItem.requestInfo.adminPreferredDate,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -3795,8 +4434,9 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                               MainAxisSize.max,
                                                                           children:
                                                                               [
-                                                                            if (_model.choiceChipsValue ==
-                                                                                'Pending')
+                                                                            if ((_model.choiceChipsValue ==
+                                                                                'Pending') &&
+                                                                                _designerMustAccept(desginermovementListItem))
                                                                               Builder(
                                                                                 builder: (context) => FFButtonWidget(
                                                                                   onPressed: () async {
@@ -4275,11 +4915,16 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     borderRadius: BorderRadius.circular(8.0),
                                                                                     child: Image.network(
                                                                                       getCORSProxyUrl(
-                                                                                        rowProductsRecord.productInfo.galleryImage.firstOrNull!,
+                                                                                        productThumbUrl(
+                                                                                          rowProductsRecord.productInfo.featureImage,
+                                                                                          rowProductsRecord.productInfo.galleryImage,
+                                                                                        ),
                                                                                       ),
                                                                                       width: 40.0,
                                                                                       height: 40.0,
                                                                                       fit: BoxFit.cover,
+                                                                                      errorBuilder: (context, error, stackTrace) =>
+                                                                                          SizedBox(width: 40.0, height: 40.0),
                                                                                       alignment: Alignment(0.0, 0.0),
                                                                                     ),
                                                                                   ),
@@ -4426,7 +5071,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            desginermovementListItem.createdAt!,
+                                                                            desginermovementListItem.createdAt,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -4478,7 +5123,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            desginermovementListItem.requestInfo.adminPreferredDate!,
+                                                                            desginermovementListItem.requestInfo.adminPreferredDate,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -4531,7 +5176,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                     headingRowHeight:
                                                                         40.0,
                                                                     dataRowHeight:
-                                                                        60.0,
+                                                                        76.0,
                                                                     columnSpacing:
                                                                         16.0,
                                                                     headingRowColor:
@@ -4871,6 +5516,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 ),
                                                                           ),
                                                                         ),
+                                                                        fixedWidth: 220.0,
                                                                       ),
                                                                       DataColumn2(
                                                                         label: DefaultTextStyle
@@ -4896,7 +5542,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                           ),
                                                                         ),
                                                                         fixedWidth:
-                                                                            130.0,
+                                                                            220.0,
                                                                       ),
                                                                     ],
                                                                     dataRowBuilder: (productListItem,
@@ -4939,11 +5585,16 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     borderRadius: BorderRadius.circular(8.0),
                                                                                     child: Image.network(
                                                                                       getCORSProxyUrl(
-                                                                                        rowProductsRecord.productInfo.galleryImage.firstOrNull!,
+                                                                                        productThumbUrl(
+                                                                                          rowProductsRecord.productInfo.featureImage,
+                                                                                          rowProductsRecord.productInfo.galleryImage,
+                                                                                        ),
                                                                                       ),
                                                                                       width: 40.0,
                                                                                       height: 40.0,
                                                                                       fit: BoxFit.cover,
+                                                                                      errorBuilder: (context, error, stackTrace) =>
+                                                                                          SizedBox(width: 40.0, height: 40.0),
                                                                                       alignment: Alignment(0.0, 0.0),
                                                                                     ),
                                                                                   ),
@@ -5089,7 +5740,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            productListItem.createdAt!,
+                                                                            productListItem.createdAt,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -5126,8 +5777,8 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                               () {
                                                                                 if (productListItem.enquiryInfo.fulfillStatus == 'Received') {
                                                                                   return 'Enquiry Closed';
-                                                                                } else if (productListItem.requestInfo.fulfillStatus == 'Received') {
-                                                                                  return 'Received';
+                                                                                } else if (StoreValleyIntakeTracking.isFulfillComplete(productListItem.requestInfo.fulfillStatus)) {
+                                                                                  return 'Completed';
                                                                                 } else {
                                                                                   return 'Accepted';
                                                                                 }
@@ -5149,7 +5800,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            productListItem.requestInfo.adminPreferredDate!,
+                                                                            productListItem.requestInfo.adminPreferredDate,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -5169,7 +5820,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                         Text(
                                                                           dateTimeFormat(
                                                                             "yMMMd",
-                                                                            productListItem.requestInfo.designerPreferredNotes!,
+                                                                            productListItem.requestInfo.designerPreferredNotes,
                                                                             locale:
                                                                                 FFLocalizations.of(context).languageCode,
                                                                           ),
@@ -5254,14 +5905,23 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                       return 'Enquiry Received';
                                                                                     } else if (productListItem.enquiryInfo.fulfillStatus == 'Cancelled') {
                                                                                       return 'Enquiry Cancelled';
-                                                                                    } else if (productListItem.requestInfo.fulfillStatus == 'Received') {
-                                                                                      return 'Recevied';
+                                                                                    } else if (StoreValleyIntakeTracking.isFulfillComplete(productListItem.requestInfo.fulfillStatus)) {
+                                                                                      return 'Completed';
                                                                                     } else if (productListItem.requestInfo.fulfillStatus == 'Cancelled') {
                                                                                       return 'Request Cancelled';
+                                                                                    } else if (productListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') {
+                                                                                      return 'Shipping';
+                                                                                    } else if (productListItem.requestInfo.fulfillStatus == 'Ready to pickup') {
+                                                                                      return 'Ready to pickup';
                                                                                     } else {
-                                                                                      return 'Processing';
+                                                                                      return productListItem.requestInfo.fulfillStatus.isEmpty
+                                                                                          ? 'Processing'
+                                                                                          : productListItem.requestInfo.fulfillStatus;
                                                                                     }
                                                                                   }(),
+                                                                                  maxLines: 1,
+                                                                                  softWrap: false,
+                                                                                  overflow: TextOverflow.ellipsis,
                                                                                   style: FlutterFlowTheme.of(context).bodyMedium.override(
                                                                                         font: GoogleFonts.inter(
                                                                                           fontWeight: FontWeight.w500,
@@ -5276,6 +5936,28 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 ),
                                                                               ],
                                                                             ),
+                                                                            if (productListItem.requestInfo.requestType == 'Restock')
+                                                                              Row(
+                                                                                mainAxisSize: MainAxisSize.min,
+                                                                                children: [
+                                                                                  _restockPickupOtpRow(productListItem),
+                                                                                  if ((productListItem.requestInfo.fulfillStatus == 'DeliveryPartnerAssigned') || StoreValleyIntakeTracking.isFulfillComplete(productListItem.requestInfo.fulfillStatus))
+                                                                                    InkWell(
+                                                                                      splashColor: Colors.transparent,
+                                                                                      focusColor: Colors.transparent,
+                                                                                      hoverColor: Colors.transparent,
+                                                                                      highlightColor: Colors.transparent,
+                                                                                      onTap: () async {
+                                                                                        await _openRestockIntakeTracker(productListItem);
+                                                                                      },
+                                                                                      child: Icon(
+                                                                                        FFIcons.kpickup,
+                                                                                        color: FFAppState().theme.themeMain.primaryText,
+                                                                                        size: 18.0,
+                                                                                      ),
+                                                                                    ),
+                                                                                ].divide(SizedBox(width: 4.0)),
+                                                                              ),
                                                                             if (responsiveVisibility(
                                                                               context: context,
                                                                               desktop: false,
@@ -5315,9 +5997,11 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                 MainAxisSize.max,
                                                                             children:
                                                                                 [
-                                                                              if ((productListItem.requestInfo.requestStatus == 'Accepted') && (productListItem.requestInfo.fulfillStatus == 'Processing'))
+                                                                              if ((productListItem.requestInfo.requestStatus == 'Accepted') && (productListItem.requestInfo.fulfillStatus == 'Processing') && (productListItem.requestInfo.requestType == 'Restock') && (FFAppState().currentUserRoleKey == 'designer'))
                                                                                 FFButtonWidget(
-                                                                                  onPressed: () async {},
+                                                                                  onPressed: () async {
+                                                                                    await _designerReadyToPickup(productListItem);
+                                                                                  },
                                                                                   text: FFLocalizations.of(context).getText(
                                                                                     'aw45i9fy' /* Ready to Pickup */,
                                                                                   ),
@@ -5341,7 +6025,39 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     borderRadius: BorderRadius.circular(8.0),
                                                                                   ),
                                                                                 ),
-                                                                              if (((productListItem.enquiryInfo.fulfillStatus == 'Enquiry open') || (productListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned')) && (productListItem.requestInfo.fulfillStatus == 'Received'))
+                                                                              if ((productListItem.requestInfo.fulfillStatus == 'Ready to pickup') && (productListItem.requestInfo.requestType == 'Restock') && (FFAppState().currentUserRoleKey == 'designer'))
+                                                                                FFButtonWidget(
+                                                                                  onPressed: () async {
+                                                                                    await _openRestockPickupRequest(
+                                                                                      productList,
+                                                                                      selected: productListItem,
+                                                                                    );
+                                                                                  },
+                                                                                  text: FFLocalizations.of(context).getText(
+                                                                                    '9ov4m9sf' /* Create Pickup Request */,
+                                                                                  ),
+                                                                                  showLoadingIndicator: false,
+                                                                                  options: FFButtonOptions(
+                                                                                    height: 30.0,
+                                                                                    padding: EdgeInsetsDirectional.fromSTEB(12.0, 0.0, 12.0, 0.0),
+                                                                                    iconPadding: EdgeInsetsDirectional.fromSTEB(0.0, 0.0, 0.0, 0.0),
+                                                                                    color: FlutterFlowTheme.of(context).primary,
+                                                                                    textStyle: FlutterFlowTheme.of(context).titleSmall.override(
+                                                                                          font: GoogleFonts.inter(
+                                                                                            fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                            fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                          ),
+                                                                                          color: Colors.white,
+                                                                                          fontSize: 10.0,
+                                                                                          letterSpacing: 0.0,
+                                                                                          fontWeight: FlutterFlowTheme.of(context).titleSmall.fontWeight,
+                                                                                          fontStyle: FlutterFlowTheme.of(context).titleSmall.fontStyle,
+                                                                                        ),
+                                                                                    elevation: 1.0,
+                                                                                    borderRadius: BorderRadius.circular(8.0),
+                                                                                  ),
+                                                                                ),
+                                                                              if (((productListItem.enquiryInfo.fulfillStatus == 'Enquiry open') || (productListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned')) && StoreValleyIntakeTracking.isFulfillComplete(productListItem.requestInfo.fulfillStatus))
                                                                                 Builder(
                                                                                   builder: (context) => FFButtonWidget(
                                                                                     onPressed: () async {
@@ -5396,7 +6112,7 @@ class _InventorySMWidgetState extends State<InventorySMWidget> {
                                                                                     ),
                                                                                   ),
                                                                                 ),
-                                                                              if ((productListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') && (productListItem.requestInfo.fulfillStatus == 'Received'))
+                                                                              if ((productListItem.enquiryInfo.fulfillStatus == 'DeliveryPartnerAssigned') && StoreValleyIntakeTracking.isFulfillComplete(productListItem.requestInfo.fulfillStatus))
                                                                                 FFButtonWidget(
                                                                                   onPressed: () async {
                                                                                     var confirmDialogResponse = await showDialog<bool>(
