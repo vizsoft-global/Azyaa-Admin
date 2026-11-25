@@ -6,6 +6,8 @@ const {
   mapDeliveryWebhookStatus,
   eventStatus,
   verifySignature,
+  signWebhookBody,
+  webhookEventRecord,
 } = require("./store_valley_webhook_order.js");
 
 function assertEqual(actual, expected, label) {
@@ -148,5 +150,67 @@ assertEqual(
   false,
   "unsigned destination fails closed",
 );
+
+// --- signing helper round-trips with the verifier ---
+assertEqual(signWebhookBody(rawBody, timestamp, secret), hex, "signWebhookBody matches the reference HMAC");
+assertEqual(
+  verifySignature(rawBody, timestamp, signWebhookBody(rawBody, timestamp, secret), secret),
+  true,
+  "a body signed by the helper verifies",
+);
+
+// --- what is kept about a processed update ---
+const kept = webhookEventRecord({
+  event_id: "delivery_order_9",
+  event_type: "storevalley.delivery_order.delivered",
+  resource_type: "delivery_order",
+  resource_id: trackingId,
+  client_order_id: "sv-test-delivery-3-RM",
+  new_status: "outForDelivery",
+  data: {
+    proof: { photo_url: "https://example.com/p.jpg", signature_url: null },
+    otp_verification: { status: "verified", failed_attempts: 2 },
+    delivery_address: { contact_phone: "+96550000000" },
+  },
+  delivery_otp: "123456",
+});
+assertEqual(kept.event_id, "delivery_order_9", "keeps event id");
+assertEqual(kept.resource_id, trackingId, "keeps resource id");
+assertEqual(kept.status, "out_for_delivery", "keeps the mapped status");
+assertEqual(kept.client_order_id, "sv-test-delivery-3-RM", "keeps client order id");
+assertEqual(kept.external_request_id, null, "missing ids are null");
+assertEqual(kept.delivery_order_id, null, "missing delivery id is null");
+assertEqual(kept.otp_status, "verified", "keeps otp outcome");
+assertEqual(kept.otp_failed_attempts, 2, "keeps failed attempts");
+assertEqual(kept.has_photo, true, "photo flag");
+assertEqual(kept.has_signature, false, "signature flag");
+assertEqual(kept.selftest, false, "a real update is not a self-test");
+assertEqual(
+  JSON.stringify(kept).includes("96550000000") ||
+    JSON.stringify(kept).includes("123456") ||
+    JSON.stringify(kept).includes("example.com"),
+  false,
+  "no phone, code or proof link is kept",
+);
+
+const keptLogistics = webhookEventRecord({
+  event_id: "warehouse_intake_request_1",
+  resource_type: "warehouse_intake_request",
+  resource_id: "req-1",
+  external_request_id: "INT-BCH1195",
+  delivery_order_id: "dlv-1",
+  status: "stored",
+});
+assertEqual(keptLogistics.status, "stored", "logistics status");
+assertEqual(keptLogistics.external_request_id, "INT-BCH1195", "external id");
+assertEqual(keptLogistics.delivery_order_id, "dlv-1", "delivery order id");
+assertEqual(keptLogistics.otp_failed_attempts, 0, "attempts default to 0");
+assertEqual(keptLogistics.otp_status, null, "no otp outcome");
+
+const keptSelftest = webhookEventRecord({ event_id: "selftest_1", event_type: "storevalley.selftest", resource_type: "selftest" });
+assertEqual(keptSelftest.selftest, true, "self-test is marked");
+assertEqual(keptSelftest.status, null, "self-test has no status");
+assertEqual(webhookEventRecord(null).event_id, null, "null-safe");
+assertEqual(webhookEventRecord(undefined).has_photo, false, "null-safe flags");
 
 console.log("store_valley_webhook.test.js ok");

@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { mergeInventoryCacheDoc } = require("./store_valley_inventory_cache.js");
+const { requireStaff } = require("./store_valley_staff.js");
 
 const DEFAULT_BASE_URL =
   "https://us-central1-store-valley-websitek-staging.cloudfunctions.net/api/v1";
@@ -63,12 +64,7 @@ exports.storeValleySyncInventory = functions
     memory: "256MB",
   })
   .https.onCall(async (data, context) => {
-    if (!context.auth) {
-      throw new functions.https.HttpsError(
-        "unauthenticated",
-        "Sign in required.",
-      );
-    }
+    await requireStaff(context, { noDesigner: true });
 
     const apiKey = configValue("api_key", "STOREVALLEY_API_KEY");
     if (!apiKey) {

@@ -5,14 +5,11 @@ const {
   requestStoreValley,
   notifyOtp,
 } = require("./store_valley_http.js");
+const { requireStaff } = require("./store_valley_staff.js");
 
 exports.storeValleyProxy = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Sign in required.",
-    );
-  }
+  // Staff only: this call spends the company's Store Valley key.
+  await requireStaff(context);
 
   const method = String((data && data.method) || "GET").toUpperCase();
   const path = String((data && data.path) || "");

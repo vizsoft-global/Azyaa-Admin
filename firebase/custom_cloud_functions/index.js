@@ -40,3 +40,5 @@ exports.retryStoreValleyDelivery =
   storeValleyDeliveryJobs.retryStoreValleyDelivery;
 exports.backfillStoreValleyDeliveries =
   storeValleyDeliveryJobs.backfillStoreValleyDeliveries;
+const storeValleyDiagnostics = require("./store_valley_diagnostics.js");
+exports.storeValleyDiagnostics = storeValleyDiagnostics.storeValleyDiagnostics;

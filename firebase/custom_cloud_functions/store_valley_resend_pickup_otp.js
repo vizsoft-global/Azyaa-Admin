@@ -1,6 +1,7 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { notifyOtp } = require("./store_valley_proxy.js");
+const { requireStaff } = require("./store_valley_staff.js");
 
 function assertAuthenticated(auth) {
   if (!auth) {
@@ -37,6 +38,9 @@ function resolvePickupOtpForResend(docData) {
 }
 
 function toHttpsError(error) {
+  if (error instanceof functions.https.HttpsError) {
+    throw error;
+  }
   const code = error && error.code;
   if (code === "unauthenticated") {
     throw new functions.https.HttpsError("unauthenticated", error.message);
@@ -72,6 +76,7 @@ exports.storeValleyResendPickupOtp = functions.https.onCall(
   async (data, context) => {
     try {
       assertAuthenticated(context && context.auth);
+      await requireStaff(context);
       const trackingId = String(
         (data && (data.trackingId || data.request_id)) || "",
       ).trim();
