@@ -5,6 +5,7 @@ const logic = require("./warehouse_stock_reservation.js");
 const ops = require("./store_valley_delivery_jobs_ops.js");
 const { requestStoreValley } = require("./store_valley_http.js");
 const { releaseOrder } = require("./warehouse_stock_reservation_ops.js");
+const { requireStaff } = require("./store_valley_staff.js");
 
 function svClient() {
   return {
@@ -13,13 +14,9 @@ function svClient() {
   };
 }
 
+// Retrying and backfilling deliveries is for panel staff, not designers or customers.
 function requireAuth(context) {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Sign in required.",
-    );
-  }
+  return requireStaff(context, { noDesigner: true });
 }
 
 async function releaseIfNeeded(db, jobData, result) {
@@ -110,7 +107,7 @@ exports.sweepStoreValleyDeliveryJobs = functions
   });
 
 exports.retryStoreValleyDelivery = functions.https.onCall(async (data, context) => {
-  requireAuth(context);
+  await requireAuth(context);
   const db = admin.firestore();
   const jobId = data && (data.job_id || data.jobId);
   const orderId = data && (data.order_id || data.orderId);
@@ -146,7 +143,7 @@ exports.retryStoreValleyDelivery = functions.https.onCall(async (data, context) 
 exports.backfillStoreValleyDeliveries = functions
   .runWith({ timeoutSeconds: 300, memory: "512MB" })
   .https.onCall(async (data, context) => {
-    requireAuth(context);
+    await requireAuth(context);
     const db = admin.firestore();
     const pageSize = 50;
     let lastDoc = null;

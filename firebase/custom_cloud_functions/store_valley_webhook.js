@@ -28,6 +28,7 @@ const {
   patchDeliveryInfoList,
   eventStatus,
   verifySignature,
+  webhookEventRecord,
 } = require("./store_valley_webhook_order.js");
 
 function configValue(key, envName) {
@@ -546,6 +547,16 @@ exports.storeValleyWebhook = functions.https.onRequest(async (req, res) => {
   }
 
   const resourceType = event.resource_type || "";
+  if (resourceType === "selftest") {
+    // Sent by storeValleyDiagnostics to prove this address accepts a signed
+    // update. It is recorded and nothing else is touched.
+    await eventRef.set({
+      ...webhookEventRecord(event),
+      received_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    res.status(200).json({ ok: true, selftest: true });
+    return;
+  }
   if (resourceType === "delivery_order") {
     await applyDeliveryEvent(event);
   } else if (resourceType === "inventory") {
@@ -555,6 +566,7 @@ exports.storeValleyWebhook = functions.https.onRequest(async (req, res) => {
   }
 
   await eventRef.set({
+    ...webhookEventRecord(event),
     event_id: eventId,
     event_type: event.event_type || "",
     resource_type: resourceType,

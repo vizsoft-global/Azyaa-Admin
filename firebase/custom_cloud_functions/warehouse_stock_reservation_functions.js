@@ -6,14 +6,11 @@ const {
   backfillReservations,
 } = require("./warehouse_stock_reservation_ops.js");
 const logic = require("./warehouse_stock_reservation.js");
+const { requireStaff } = require("./store_valley_staff.js");
 
+// Reserving and releasing stock is for panel staff, not designers or customers.
 function requireAuth(context) {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Sign in required.",
-    );
-  }
+  return requireStaff(context, { noDesigner: true });
 }
 
 function orderRefFromData(db, data) {
@@ -28,7 +25,7 @@ function orderRefFromData(db, data) {
 }
 
 exports.reserveWarehouseStock = functions.https.onCall(async (data, context) => {
-  requireAuth(context);
+  await requireAuth(context);
   const db = admin.firestore();
   const result = await reserveOrder(db, orderRefFromData(db, data), {
     force: false,
@@ -47,7 +44,7 @@ exports.reserveWarehouseStock = functions.https.onCall(async (data, context) => 
 });
 
 exports.releaseWarehouseStock = functions.https.onCall(async (data, context) => {
-  requireAuth(context);
+  await requireAuth(context);
   const db = admin.firestore();
   const reason = data && data.reason === "shipped" ? "shipped" : "cancelled";
   const productIds = Array.isArray(data && data.product_ids)
@@ -65,7 +62,7 @@ exports.backfillWarehouseReservations = functions
     memory: "512MB",
   })
   .https.onCall(async (data, context) => {
-    requireAuth(context);
+    await requireAuth(context);
     const db = admin.firestore();
     return backfillReservations(db, {
       warehouseId: data && data.warehouse_id,

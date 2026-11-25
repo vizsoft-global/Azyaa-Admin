@@ -76,13 +76,22 @@ function otpMessage(otpType, otp) {
   };
 }
 
+/**
+ * Where the code email goes: the person's email address, or "" when there is
+ * none. A phone number is never used as a mail address.
+ */
+function mailRecipient(notifyCustomer) {
+  const email = String((notifyCustomer && notifyCustomer.email) || "").trim();
+  return email.includes("@") ? email : "";
+}
+
 async function notifyOtp(notifyCustomer, otp) {
   if (!notifyCustomer || typeof notifyCustomer !== "object") {
     return;
   }
   const copy = otpMessage(notifyCustomer.otpType || "delivery", otp);
   const db = admin.firestore();
-  const mailTo = notifyCustomer.email || notifyCustomer.phone;
+  const mailTo = mailRecipient(notifyCustomer);
   if (mailTo) {
     await db.collection("mail").add({
       created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -215,13 +224,10 @@ async function requestStoreValley(opts) {
 
   let notify = opts && opts.notifyCustomer;
   const generatedOtp = attached.otp;
-  if (generatedOtp) {
-    if (!notify || !notify.otpType) {
-      notify = Object.assign({}, notify, {
-        otpType: defaultOtpType(path),
-      });
-    }
-    await notifyOtp(notify, generatedOtp);
+  if (generatedOtp && (!notify || !notify.otpType)) {
+    notify = Object.assign({}, notify, {
+      otpType: defaultOtpType(path),
+    });
   }
 
   const query = opts && opts.query && typeof opts.query === "object" ? opts.query : {};
@@ -264,6 +270,20 @@ async function requestStoreValley(opts) {
     parsed = { message: text };
   }
 
+  // The code is sent only once Store Valley has accepted the request, so a
+  // refused request (or a retry of one) never mails a code that cannot be used.
+  if (response.ok && generatedOtp) {
+    const send = (opts && opts.notify) || notifyOtp;
+    try {
+      await send(notify, generatedOtp);
+    } catch (error) {
+      console.error(
+        "storeValley OTP notify failed after an accepted request",
+        error && error.message,
+      );
+    }
+  }
+
   if (response.ok && opts && opts.persistSnapshot !== false) {
     await persistCreateSnapshot(path, method, parsed, {
       pickupOtp: generatedOtp,
@@ -284,6 +304,7 @@ module.exports = {
   configValue,
   isAllowed,
   generateOtp,
+  mailRecipient,
   notifyOtp,
   persistCreateSnapshot,
   attachGeneratedDeliveryOtp,
