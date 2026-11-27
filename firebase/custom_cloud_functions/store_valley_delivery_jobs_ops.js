@@ -2,6 +2,11 @@ const jobs = require("./store_valley_delivery_jobs.js");
 const ids = require("./store_valley_client_ids.js");
 const logic = require("./warehouse_stock_reservation.js");
 const { inventoryCacheDocId } = require("./store_valley_inventory_cache.js");
+const {
+  codeRecord,
+  publicCodeMarker,
+  saveCode,
+} = require("./store_valley_codes.js");
 
 function timestamp() {
   try {
@@ -173,7 +178,9 @@ async function persistLogisticsSnapshot(db, path, body, extras) {
   if (!trackingId) {
     return;
   }
-  await db.collection("logistics_response").add({
+  const pickupOtp = extras && extras.pickupOtp ? extras.pickupOtp : "";
+  const notify = (extras && extras.notifyCustomer) || null;
+  const snapshot = {
     swftTrackID: trackingId,
     id: trackingId,
     status: (body && body.status) || "",
@@ -191,8 +198,27 @@ async function persistLogisticsSnapshot(db, path, body, extras) {
       (body && body.return_destination_type) || null,
     client_order_id: (body && body.client_order_id) || null,
     resource_path: path,
-    pickup_otp: extras && extras.pickupOtp ? extras.pickupOtp : null,
-  });
+  };
+  if (pickupOtp) {
+    // The code, and who it was sent to, are kept where no client can read them.
+    await saveCode(
+      db,
+      codeRecord({
+        trackingId,
+        code: pickupOtp,
+        notify,
+        body,
+        path,
+        sentAt: timestamp(),
+        now: timestamp(),
+      }),
+    );
+    Object.assign(
+      snapshot,
+      publicCodeMarker({ now: timestamp(), otpType: notify && notify.otpType }),
+    );
+  }
+  await db.collection("logistics_response").add(snapshot);
 }
 
 async function persistDeliveryDoc(db, orderSnap, fields) {
@@ -294,7 +320,10 @@ async function processWarehouse(db, job, orderSnap, sv) {
     delivery_tracking_id: trackingId,
     delivery_id: trackingId,
   });
-  await persistLogisticsSnapshot(db, "/orders", body, { pickupOtp });
+  await persistLogisticsSnapshot(db, "/orders", body, {
+    pickupOtp,
+    notifyCustomer: jobs.notifyCustomerFromOrder(order),
+  });
   await orderSnap.ref.update({
     ready_shipping_request_status: "REQUESTED",
     delivery_info_list: arrayUnion([
@@ -304,7 +333,7 @@ async function processWarehouse(db, job, orderSnap, sv) {
         delivery_type: "ready",
         product_ids: productIds,
         delivery_ref: deliveryRef,
-        pickup_otp: pickupOtp || null,
+        has_code: !!pickupOtp,
       },
     ]),
     updated_at: timestamp(),
@@ -381,7 +410,10 @@ async function processCustom(db, job, orderSnap, sv) {
     delivery_tracking_id: trackingId,
     delivery_id: trackingId,
   });
-  await persistLogisticsSnapshot(db, "/pickup-requests", body, { pickupOtp });
+  await persistLogisticsSnapshot(db, "/pickup-requests", body, {
+    pickupOtp,
+    notifyCustomer: jobs.notifyCustomerFromOrder(order),
+  });
   const nextItems = jobs.cartItems(order).map((item) => {
     if (!payload.productIds.includes(String(item.product_id))) {
       return item;
@@ -410,7 +442,7 @@ async function processCustom(db, job, orderSnap, sv) {
         delivery_type: "custom",
         product_ids: payload.productIds,
         delivery_ref: deliveryRef,
-        pickup_otp: pickupOtp || null,
+        has_code: !!pickupOtp,
       },
     ]),
     updated_at: timestamp(),

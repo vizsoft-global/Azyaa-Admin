@@ -237,14 +237,35 @@ function fakeSv(getBody) {
   );
   assertEqual(
     warehouseLogistics && warehouseLogistics.pickup_otp,
-    "461832",
-    "warehouse snapshot stores pickup otp",
+    undefined,
+    "warehouse snapshot does not carry the code",
+  );
+  assertEqual(
+    warehouseLogistics && warehouseLogistics.has_code,
+    true,
+    "warehouse snapshot says a code exists",
+  );
+  assertEqual(
+    warehouseLogistics && warehouseLogistics.otp_email,
+    undefined,
+    "warehouse snapshot carries no contact details",
   );
   assertEqual(
     afterRm.delivery_info_list[0].pickup_otp,
-    "461832",
-    "order delivery_info_list stores pickup otp",
+    undefined,
+    "order delivery_info_list does not carry the code",
   );
+  assertEqual(
+    afterRm.delivery_info_list[0].has_code,
+    true,
+    "order delivery_info_list says a code exists",
+  );
+  const privateCode = (await db.doc("store_valley_codes/SV-WH-1").get()).data();
+  assertEqual(privateCode && privateCode.code, "461832", "code is kept in the private store");
+  assertEqual(privateCode && privateCode.otp_type, "delivery", "private record keeps the code type");
+  assertEqual(privateCode && privateCode.phone, "+96550000000", "private record keeps who it was sent to");
+  assertEqual(privateCode && privateCode.client_order_id, "ORD1-RM", "private record keeps the reference");
+  assertEqual(privateCode && privateCode.delivery_order_id, "SV-WH-1", "private record keeps the delivery id");
 
   const svGet = fakeSv({
     order_id: "EXISTING",

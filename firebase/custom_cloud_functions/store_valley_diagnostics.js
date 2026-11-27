@@ -7,6 +7,7 @@ const {
 } = require("./store_valley_http.js");
 const { signWebhookBody } = require("./store_valley_webhook_order.js");
 const { requireStaff } = require("./store_valley_staff.js");
+const codes = require("./store_valley_codes.js");
 
 const EVENTS = "store_valley_webhook_events";
 const JOBS = "store_valley_delivery_jobs";
@@ -298,8 +299,154 @@ async function webhookSelftest() {
   };
 }
 
+/* ---------- moving codes out of readable records ---------- */
+
+const ORDER_PAGE = 200;
+
+/**
+ * Moves every delivery or pickup code still sitting on a readable record into
+ * the private store, and takes it (and the contact details beside it) off that
+ * record. The private copy is written first, so a failure never loses a code.
+ * With `dryRun` it only counts.
+ */
+async function moveCodes(db, dryRun) {
+  const FieldValue = admin.firestore.FieldValue;
+  const moved = { logistics: 0, orders: 0, movements: 0, returns: 0 };
+  let skipped = 0;
+  const stamp = (record) =>
+    Object.assign({}, record, { updated_at: FieldValue.serverTimestamp() });
+
+  // 1. The warehouse's answers (`logistics_response`): code and contact details.
+  const logistics = new Map();
+  for (const field of ["pickup_otp", "otp_user_id", "otp_phone", "otp_email"]) {
+    const snap = await db.collection("logistics_response").where(field, ">", "").get();
+    snap.forEach((doc) => logistics.set(doc.id, doc));
+  }
+  for (const doc of logistics.values()) {
+    const plan = codes.planLogisticsMove(doc.data() || {});
+    if (!plan) {
+      skipped += 1;
+      continue;
+    }
+    moved.logistics += 1;
+    if (dryRun) {
+      continue;
+    }
+    if (plan.record) {
+      await codes.saveMovedCode(db, stamp(plan.record));
+    }
+    const patch = {};
+    plan.remove.forEach((key) => {
+      patch[key] = FieldValue.delete();
+    });
+    if (plan.hasCode) {
+      patch.has_code = true;
+    }
+    await doc.ref.update(patch);
+  }
+
+  // 2. Orders: the code on each shipment of `delivery_info_list`. An array
+  // cannot be searched by a field of its entries, so every order is read.
+  let last = null;
+  while (true) {
+    let query = db
+      .collection("orders")
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .select("delivery_info_list")
+      .limit(ORDER_PAGE);
+    if (last) {
+      query = query.startAfter(last);
+    }
+    const page = await query.get();
+    if (page.empty) {
+      break;
+    }
+    for (const doc of page.docs) {
+      if (!codes.planOrderMove(doc.data() || {})) {
+        continue;
+      }
+      moved.orders += 1;
+      if (dryRun) {
+        continue;
+      }
+      // Re-read inside a transaction: a status update may be rewriting the same list.
+      const plan = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(doc.ref);
+        const current = fresh.exists ? codes.planOrderMove(fresh.data() || {}) : null;
+        if (current) {
+          for (const record of current.records) {
+            const ref = db.collection(codes.COLLECTION).doc(codes.codeDocId(record.tracking_id));
+            const existing = await tx.get(ref);
+            const patch = codes.mergeKeepingCode(
+              existing.exists ? existing.data() || {} : null,
+              stamp(record),
+            );
+            if (patch) {
+              current.writes = (current.writes || []).concat([{ ref, patch }]);
+            }
+          }
+          (current.writes || []).forEach((write) => tx.set(write.ref, write.patch, { merge: true }));
+          tx.update(doc.ref, { delivery_info_list: current.nextList });
+        }
+        return current;
+      });
+      if (!plan) {
+        moved.orders -= 1;
+      }
+    }
+    last = page.docs[page.docs.length - 1];
+    if (page.docs.length < ORDER_PAGE) {
+      break;
+    }
+  }
+
+  // 3. Restock and return-to-designer requests.
+  const movements = await db
+    .collection("inventorymovementlog")
+    .where("request_delivery_info.pickup_otp", ">", "")
+    .get();
+  for (const doc of movements.docs) {
+    const plan = codes.planMovementMove(doc.data() || {});
+    if (!plan) {
+      skipped += 1;
+      continue;
+    }
+    moved.movements += 1;
+    if (dryRun) {
+      continue;
+    }
+    for (const record of plan.records) {
+      await codes.saveMovedCode(db, stamp(record));
+    }
+    await doc.ref.update({
+      "request_delivery_info.pickup_otp": FieldValue.delete(),
+      "request_delivery_info.has_code": plan.hasCode,
+    });
+  }
+
+  // 4. Customer returns.
+  const returns = await db.collection("return_requests").where("pickup_otp", ">", "").get();
+  for (const doc of returns.docs) {
+    const plan = codes.planReturnMove(doc.data() || {});
+    if (!plan) {
+      skipped += 1;
+      continue;
+    }
+    moved.returns += 1;
+    if (dryRun) {
+      continue;
+    }
+    for (const record of plan.records) {
+      await codes.saveMovedCode(db, stamp(record));
+    }
+    await doc.ref.update({ pickup_otp: FieldValue.delete(), has_code: plan.hasCode });
+  }
+
+  return { dry_run: dryRun, moved, skipped };
+}
+
 exports.storeValleyDiagnostics = functions
-  .runWith({ timeoutSeconds: 60, memory: "256MB" })
+  .runWith({ timeoutSeconds: 300, memory: "256MB" })
   .https.onCall(async (data, context) => {
     await requireStaff(context, { noDesigner: true });
     const action = String((data && data.action) || "status");
@@ -316,6 +463,10 @@ exports.storeValleyDiagnostics = functions
         return { events: [] };
       }
       return { events: await eventsForIds(db, ids) };
+    }
+    if (action === "move_codes") {
+      // Counts only unless the caller says `dry_run: false`.
+      return moveCodes(db, !(data && data.dry_run === false));
     }
     throw new functions.https.HttpsError("invalid-argument", "Unknown action.");
   });

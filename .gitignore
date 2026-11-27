@@ -11,3 +11,6 @@ firebase/custom_cloud_functions/.env.*
 !firebase/custom_cloud_functions/.env.example
 
 firebase/functions/node_modules/
+firebase/rules-tests/node_modules/
+firebase/rules-tests/*.log
+firebase/rules-tests/.old-firestore.rules
