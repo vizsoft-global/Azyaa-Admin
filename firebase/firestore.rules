@@ -55,7 +55,7 @@ service cloud.firestore {
     // counter, while signed in. (Issuing numbers from the back office is stage 2.)
     match /id_map/{document} {
       allow read: if true;
-      allow update: if signedIn();
+      allow update: if signedIn() && unchanged('type');
       allow create, delete: if false;
     }
 
@@ -87,17 +87,25 @@ service cloud.firestore {
         ];
       }
 
+      // A record may only carry its own login id. (The panel finds a person by
+      // `uid`; a second record claiming a staff uid would lock that person out.)
+      function ownUid() {
+        return request.resource.data.get('uid', userId) == userId;
+      }
+
       allow read: if true;
 
       // Your own record, under your own login id, with no panel role in it.
       // (The panel never creates a record for someone else; it only changes existing ones.)
       allow create: if isMe(userId) && roleOf(request.resource.data) == '' && plainUserRole()
-        && approvals(request.resource.data) == [null, null];
+        && approvals(request.resource.data) == [null, null]
+        && ownUid();
 
       allow update: if
         // your own record: anything but your role and your approvals
         (isMe(userId) && keepsRole() && keepsOrPlainUserRole()
-          && approvals(request.resource.data) == approvals(resource.data))
+          && approvals(request.resource.data) == approvals(resource.data)
+          && (unchanged('uid') || ownUid()))
         // office: anything, except giving or taking away super admin
         || isSuperAdmin()
         || (isOffice() && sameSuperAdminStanding())
@@ -265,7 +273,11 @@ service cloud.firestore {
 
     // Return requests: raised by the customer, handled by the office.
     match /return_requests/{document} {
-      allow read, create: if signedIn();
+      allow read: if signedIn();
+      // A new request is always "Pending" and in the customer's own name.
+      allow create: if signedIn()
+        && request.resource.data.get('status', '') == 'Pending'
+        && request.resource.data.get('userRef', null) == myUserPath();
       allow update: if isOffice();
       allow delete: if isSuperAdmin();
     }

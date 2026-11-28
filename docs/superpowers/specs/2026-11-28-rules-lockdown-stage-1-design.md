@@ -13,7 +13,7 @@ What that exposes today, confirmed against the live project:
 
 1. **Anyone can make themselves a super admin.** `users` can be created by anyone and updated by any signed-in account. The panel, the rules' `isStaff()` and the back office (`store_valley_staff.js`) all decide who is staff from `users.role_unique_key`, so a customer who writes `super_admin` onto their own record gets the whole panel, the Store Valley key and the delivery codes.
 2. **Delivery partner passwords** are stored as plain text in `delivery_login_creds` (5 records) and readable without login.
-3. **Designers' bank details** (`transactions`: IBAN, account number, holder name) are readable without login.
+3. **Designers' bank details** (`transactions`: IBAN, account number, holder name) are readable without login. Stage 1 closes `transactions` only. Bank details also sit on the `users` record itself (`creator_main_info.creator_payout_info` on 12 creator records on 28 Nov 2026; `designer_main_info.designer_bank_info` when a designer saves it in the panel, none yet), and `users` stays readable until stage 2 splits it.
 4. **Every email the system sent** (`mail`, 339 records) is readable without login. Delivery codes are mailed, so this bypasses the private code store released on 28 Nov.
 5. **Anyone can send email as Azyaa.** The Trigger Email extension sends whatever record anyone creates in `mail`. (Stage 1 reduces this to "anyone with an account"; see 6.1.)
 6. **Anyone can push a notification to any user.** `sendPushNotificationToUser` and `sendPushNotificationToUsers` have no login check. `generateDynamicReport` has none either.
@@ -25,7 +25,7 @@ A second group of problems cannot be fixed by rules, because the customer app re
 
 - The payment providers' secret keys are in the `settings` record, which the app reads before login.
 - The app itself marks its orders as paid, lowers stock, credits the designer's sales and uses up coupons.
-- Guests browse designers and creators from the same `users` records that hold customers' emails, phones and addresses.
+- Guests browse designers and creators from the same `users` records that hold customers' emails, phones and addresses, and creators' payout bank details.
 
 ## 2. Goals
 
@@ -87,7 +87,7 @@ A and B are separate releases so that if something breaks, the cause is obvious 
 | `transactions` | office; a designer reads their own (`user_ref` is their record) | office | office | nobody (unchanged) |
 | `mail` | nobody | signed in | nobody | nobody |
 | `settings` | anyone (unchanged) | super admin | office | super admin |
-| `id_map` | anyone (unchanged) | nobody | signed in | nobody |
+| `id_map` | anyone (unchanged) | nobody | signed in; the record's `type` may not change (both apps find it by type) | nobody |
 | `store_valley_inventory` | staff | nobody | nobody | nobody |
 | `inventorymovementlog` | staff | staff | staff | super admin |
 | `notification` | the person it is addressed to (`to_userRef`), or office | signed in | the person it is addressed to, or office | office |
@@ -101,7 +101,7 @@ A and B are separate releases so that if something breaks, the cause is obvious 
 | `products` | anyone (unchanged) | staff | signed in (narrowed in B) | office |
 | `inventory` | anyone (unchanged) | staff | signed in (narrowed in B) | office |
 | `orders` | signed in | signed in, with `customer_id` equal to your own login id | signed in (narrowed in B) | super admin |
-| `return_requests` | signed in | signed in | office | super admin |
+| `return_requests` | signed in | signed in, with status `Pending` and `userRef` your own record | office | super admin |
 | `sales_history` | signed in | office | signed in (narrowed in B) | super admin |
 | `payment_response` | unchanged (anyone) — see open question 1 | unchanged (anyone) | unchanged (anyone) | super admin |
 | `delivery`, `logistics_response`, `store_valley_codes`, `store_valley_webhook_events`, `store_valley_delivery_jobs` | unchanged | unchanged | unchanged | unchanged |
@@ -112,6 +112,7 @@ A and B are separate releases so that if something breaks, the cause is obvious 
 - Your own record, approval status: `designer_main_info.designer_status` and `creator_main_info.creator_status` must stay as they were **if** the builder confirms from the app and panel code that no account writes its own status. If one does, leave those two fields alone and say so in the plan.
 - Someone else's record: office may change anything, except that only a super admin may give or take away `super_admin`. A customer may change only `points_balance` and `user_vto` on another person's record (the referral bonus the app pays to the referrer today). A designer may not change other people's records.
 - Create: the panel's Register form writes `role_unique_key: ""`; the rule must accept an empty or missing role and refuse anything else.
+- `uid`: a record may only carry its own login id. The panel finds a person with `uid == login id`, so without this any customer could write a staff member's uid onto their own record and lock that person out of the panel (found by the review). Office may still correct a `uid`.
 
 **`mail`, create.** Reading is closed completely, which protects the delivery codes. Sending is reduced, not closed: it needs a login, but any registered account can still create a mail record to any address. Pinning the address was considered and dropped for stage 1. The app sends to the email on the person's `users` record, which they can edit themselves, so a pin on it proves little; and the app waits for this write on the way to the "order placed" and "verify your email" screens, so a wrong refusal strands a paying or registering customer. Stage 2 moves mail sending to the back office and then closes client creates. (On 28 Nov 2026: 84 login accounts, all with an email; 79 match their record's email, 1 differs, 4 have no record.)
 

@@ -2,7 +2,7 @@
  * Things an outsider or a curious customer might try. Each must be refused;
  * the legitimate neighbour of each attack must still be allowed.
  */
-const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, collection, query, where, limit } = require("firebase/firestore");
+const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, increment, collection, query, where, limit } = require("firebase/firestore");
 const { dbOf, seedDocs, ok, no, personRecord, PEOPLE, newRules } = require("./lib");
 const { seedWorld } = require("./fixtures");
 
@@ -99,6 +99,17 @@ async function identity(env) {
   );
   await ok(updateDoc(doc(admin, "users", "cust1"), { "creator_main_info.creator_status": "active", user_role: "Creator" }), "admin approves a creator");
   await ok(updateDoc(doc(admin, "users", "designer1"), { "designer_main_info.designer_status": "active" }), "admin re-activates a designer");
+
+  // ---- a record cannot claim someone else's login id ----
+  // The panel finds a person by `uid`; a second record claiming a staff uid would lock them out.
+  await no(updateDoc(doc(cust1, "users", "cust1"), { uid: "super1" }), "customer writes a super admin's uid onto own record");
+  await no(setDoc(doc(env.authenticatedContext("claimer").firestore(), "users", "claimer"), { uid: "super1", email: "c@example.test" }), "new account creates own record claiming a super admin's uid");
+  await ok(updateDoc(doc(cust1, "users", "cust1"), { uid: "cust1", display_name: "Same uid" }), "customer saves own record with own uid");
+  await seedDocs(env, "users", { "old-no-uid": { email: "old@example.test", user_role: "Customer" } });
+  const old = env.authenticatedContext("old-no-uid").firestore();
+  await ok(updateDoc(doc(old, "users", "old-no-uid"), { display_name: "Old" }), "account whose record has no uid still saves its profile");
+  await ok(updateDoc(doc(old, "users", "old-no-uid"), { uid: "old-no-uid" }), "account whose record has no uid may add its own");
+  await ok(updateDoc(doc(admin, "users", "cust1"), { uid: "cust1" }), "office may correct a uid");
 
   // ---- deleting people ----
   await seedDocs(env, "users", { "gone-1": { uid: "gone-1" }, "gone-2": { uid: "gone-2" }, "gone-3": { uid: "gone-3" } });
@@ -221,6 +232,18 @@ async function shop(env) {
   await no(deleteDoc(doc(cust1, "orders", "o-cust1")), "customer deletes own order");
   await no(deleteDoc(doc(admin, "orders", "o-cust2")), "admin deletes an order");
   await ok(deleteDoc(doc(superDb, "orders", "o-cust2")), "super admin deletes an order");
+
+  // ---- a return starts as "Pending", in the customer's own name ----
+  const orderRef = doc(cust1, "orders", "o-cust1");
+  await ok(setDoc(doc(cust1, "return_requests", "ret-ok"), { return_request_id: "RTORD5", status: "Pending", userRef: person(cust1, "cust1"), orderRef, order_id: "AZY100", created_at: 1 }), "customer raises a return (app shape)");
+  await no(setDoc(doc(cust1, "return_requests", "ret-approved"), { return_request_id: "RTORD6", status: "Accepted", outcome: "Refunded", userRef: person(cust1, "cust1"), orderRef }), "customer creates a return that is already approved");
+  await no(setDoc(doc(cust1, "return_requests", "ret-other"), { return_request_id: "RTORD7", status: "Pending", userRef: person(cust1, "cust2"), orderRef }), "customer raises a return in someone else's name");
+  await no(setDoc(doc(cust1, "return_requests", "ret-nobody"), { return_request_id: "RTORD8", status: "Pending", orderRef }), "customer raises a return naming nobody");
+
+  // ---- the counter record keeps its type (both apps find it by type) ----
+  await no(updateDoc(doc(cust1, "id_map", "main"), { type: "X" }), "customer renames the counter record so nobody finds it");
+  await no(updateDoc(doc(cust1, "id_map", "main"), { order_id: increment(1), type: "Other" }), "customer slips a type change into a counter bump");
+  await ok(updateDoc(doc(cust1, "id_map", "main"), { order_id: increment(1) }), "customer bumps a counter");
 
   // ---- counters and settings records cannot be made or removed ----
   await no(setDoc(doc(superDb, "id_map", "second"), { type: "Main" }), "nobody creates a second counter record");
