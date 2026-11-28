@@ -10,6 +10,7 @@
  *   office   = admin1, shop1                      super    = super1, super2
  */
 const { doc, where } = require("firebase/firestore");
+const { newId } = require("./lib");
 
 const plain = () => ({ id: "seed", status: "pending" });
 const person = (db, id) => doc(db, "users", id);
@@ -113,7 +114,8 @@ const TABLE = {
   theme: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list", office: "all", super: "all" } },
 
   // ---- selling ----
-  // "update" here is the plain signed-in rule of Release A; Release B narrows it.
+  // The "update" in each row is one the customer app really makes; what a
+  // customer may NOT change is in attacks.test.js (customerLimits).
   coupon: {
     doc: () => ({ coupon_status: "active", coupon_value: "X", coupon_limit: 5, coupon_used_user_list: [] }),
     update: () => ({ coupon_limit: 4 }),
@@ -122,6 +124,8 @@ const TABLE = {
   products: {
     doc: (db, owner) => ({ status: "active", product_id: "P", product_authorizer: { product_designer_id: owner }, product_notify_list: [] }),
     update: () => ({ product_notify_list: ["someone@example.test"] }),
+    // A designer's new product goes in for review ("request"), in their own name.
+    create: (db, persona) => ({ id: newId("product"), data: { status: "request", product_id: "P", product_authorizer: { product_designer_id: persona } } }),
     rows: { anon: "get list", customer: "get list update", designer: "get list create update", office: "all", super: "all" },
   },
   inventory: {
@@ -130,9 +134,17 @@ const TABLE = {
     rows: { anon: "get list", customer: "get list update", designer: "get list create update", office: "all", super: "all" },
   },
   orders: {
+    owned: true,
     doc: (db, owner) => ({ order_id: "O", customer_id: owner, customer_ref: person(db, owner), order_status: "Initialization", total_price: 1 }),
-    update: () => ({ payment_id: "PAY-1" }),
-    rows: { anon: "", customer: "get list create update", designer: "get list create update", office: "get list create update", super: "all" },
+    // Unique per person: writing a value that is already there changes nothing and proves nothing.
+    update: (db, persona) => ({ payment_id: "PAY-" + persona }),
+    rows: {
+      anon: "",
+      customer: { own: "get list create update", other: "get list" },
+      designer: { own: "get list create update", other: "get list" },
+      office: "get list create update",
+      super: "all",
+    },
   },
   return_requests: {
     doc: (db, owner) => ({ status: "Pending", userRef: person(db, owner), return_request_id: "R" }),

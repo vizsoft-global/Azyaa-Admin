@@ -128,12 +128,12 @@ Office keeps full change rights on all of these. A designer has the customer rig
 
 | Collection | What a customer may change |
 |---|---|
-| `orders` | Only their own order (`customer_id` is their login id), and only the fields the app writes after creating it: `shipping_address`, `shipping_info`, `payment_id`, `payment_method`, `payment_type`, `payment_status`, `order_status`, `return_request_id`, `updated_at`. |
+| `orders` | Only their own order (`customer_id` is their login id), and only the fields the app writes after creating it: `shipping_address`, `shipping_info`, `payment_id`, `payment_method`, `payment_type`, `payment_status`, `order_status`, `ready_shipping_request_status`, `custom_shipping_request_status` (both written by the MyFatoorah path; found during the build), `return_request_id`, `updated_at`. |
 | `orders`, designer | Additionally, on any order: only `order_items` and `updated_at` (the panel's "line ready" action rewrites the item list). |
 | `inventory` | Only `stock`, `stock_reserved`, `updated_at`; `stock` may not go up and `stock_reserved` may not go down. |
-| `inventory`, designer | Additionally, any field on their own record (`designer_uid`). |
+| `inventory`, designer | Additionally, any field on their own record (`designer_uid`); create only as their own. |
 | `products` | Only `product_review`, `product_notify_list`, `updated_at`, `creator_id_list` inside `product_authorizer`, and `promotion` and `product_sales_history` inside `product_marketing`. |
-| `products`, designer | Additionally, any field on their own product (`product_authorizer.product_designer_id`); create only as their own. |
+| `products`, designer | Additionally, any field on their own product (`product_authorizer.product_designer_id`), except that a designer may only leave `status` as it is or set it to `request` or `archived` (approval stays with the office; added during the build, the panel never sends anything else); create only as their own, with status `request`. |
 | `coupon` | Only `coupon_used_user_list` and `coupon_limit`; `coupon_limit` may not go up. |
 | `sales_history` | Only `sale_history` and `updated_at`. |
 
