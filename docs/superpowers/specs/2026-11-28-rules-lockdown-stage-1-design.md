@@ -162,11 +162,11 @@ Facts, 28 Nov 2026:
 - The customer app on `main` no longer searches through Algolia; its search reads Firestore and matches in the app (`lib/backend/search/search_service.dart`). The Algolia key is still built in. An older store build may still search `products`, `category`, `brands` and `users` through Algolia (open question 2).
 - The old Flutter admin searches all six copies, including `orders` and `inventory`.
 - The React panel does not use Algolia (the package is listed but nothing calls it).
-- The add-ons keep their own Algolia key in Secret Manager. Whether it is the same key as the built-in one is not known and must be checked first, in the Algolia dashboard.
+- The add-ons keep their Algolia key in Secret Manager. Checked on 28 Nov 2026 (compared without printing): all six add-ons use the same key that is built into the app.
 
-Steps:
+The owner's click-by-click steps are in `docs/search-copy-steps.md`. In short:
 
-1. **Make the built-in key search-only.** In the Algolia dashboard, edit that key: rights `search` only; indexes `products`, `category`, `brands`, `users`. If the add-ons turn out to use this same key, first create a new write key, put it into the six add-ons, confirm a product edit still reaches Algolia, and only then restrict the old key. Breaks nothing in the customer app at any version. In the old Flutter admin, order search and stock search stop.
+1. **Make the built-in key search-only.** Because the add-ons share that key, first create a new write key at Algolia, put it into the add-ons, confirm a product edit still reaches Algolia, and only then edit the built-in key: rights `search` only; indexes `products`, `category`, `brands`, `users`. Breaks nothing in the customer app at any version. In the old Flutter admin, order search and stock search stop.
 2. **Stop returning private fields from the `users` copy.** In the `users` index settings, mark `email`, `user_info.date_of_birth` and `user_info.age` as not retrievable. They stay searchable for the old admin's customer search but are no longer handed back.
 3. **Remove the `orders` and `inventory` copies.** Uninstall the two add-ons that feed them and delete the two indexes at Algolia. The originals in Firestore are untouched. Only if the owner confirms the old Flutter admin is no longer used for order or stock search (open question 3); otherwise step 1 already hides them from the built-in key.
 
