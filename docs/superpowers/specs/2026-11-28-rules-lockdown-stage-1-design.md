@@ -139,6 +139,12 @@ Office keeps full change rights on all of these. A designer has the customer rig
 
 The field lists above come from reading the app's code on `main` (28 Nov 2026). The builder must re-derive each list from every write site before writing the rule (FlutterFlow record helpers, `.update(` calls and custom actions; search for the snake_case field name and the camelCase Dart name), and must check the three payment paths (UPayments, Tap, MyFatoorah), the free-order path and the in-app-purchase path separately, because each has its own copy of the after-payment writes. Where the code shows a field not listed here, the code wins and the plan records the difference.
 
+Three things added after the review, all in Release B:
+
+- **Untidy old records.** A number stored as text or left blank, or a blank where a list or map should be, is read as 0, an empty list or an empty map, so the app's after-payment writes are not refused on such a record. What the customer writes must still be a number or a list. (On 28 Nov 2026 every live stock and coupon number was a proper number; this is a guard.)
+- **Lists the app only adds to** (`coupon_used_user_list`, `sale_history`, `product_review`, `product_notify_list`, and the three lists inside the product maps): a customer may add to them but not remove or change what is there.
+- **A stock record out of step with its product.** A designer may also save a stock record that names another designer or nobody, when it belongs to a product of theirs (one such record of each kind on live). The `designer_uid` on a stock record can be changed by the office only.
+
 What Release B does **not** stop: a signed-in customer can still set `payment_status` to `CAPTURED` on their own order, drain stock by lowering it, and append to sales records. Stopping those is stage 2.
 
 ### 6.2 Back office
@@ -246,6 +252,7 @@ The owner's rule, 28 Nov 2026: avoid as many different services as possible; Fir
 3. **Does anyone still work in the old Flutter admin, and can it be taken offline?** The tables were checked against the React panel and the customer app. If designers or staff still use the old admin for real work, the builder must check its writes against Release B as well. If nobody does, taking the site offline removes one more way in.
 4. **Is there any other program that reads or writes the database directly?** For example a delivery partner app that signs partners in from `delivery_login_creds`, or a website form. None was found in the three repositories. If one exists, Release A would cut it off.
 5. **May the plain-text partner passwords be removed from the 5 old `delivery_login_creds` records?** The React panel never reads or writes them. Not done unless approved.
+7. **Release B and repeated order numbers.** The app finds "its" order after payment by order number alone, and order numbers can repeat (the counter is read and bumped in two steps; 2 repeats among 240 live orders). Today, a customer who hits a repeat marks the *other* customer's order as paid and their own stays unpaid, silently. Under Release B that write is refused instead, so that customer is stuck on the payment screen after paying: no confirmation, no mail, cart not cleared. Both are wrong; the second is visible. Stage 2 removes the cause. The owner decides before Release B: release it and accept a visible failure in that rare case, or hold Release B until stage 2. Release A is not affected.
 6. **Who holds the Algolia login, and are the three steps in 6.4 approved?** Step 1 (search-only key) and step 2 (hide email and date of birth) are safe for the customer app. Step 3 (remove the order and stock copies) depends on question 3. Until answered: nothing is changed at Algolia, and the copy stays readable.
 
 ## 11. Left to the builder

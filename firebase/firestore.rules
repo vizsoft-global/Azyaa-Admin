@@ -51,10 +51,51 @@ service cloud.firestore {
       return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
 
+    // Old records are not always tidy (a number stored as text, a blank where
+    // a list or map should be). These read a field as what it should be, so a
+    // legitimate write on such a record is not refused by accident.
+    function mapOf(data, field) {
+      return data.get(field, {}) is map ? data.get(field, {}) : {};
+    }
+
+    function listOf(data, field) {
+      return data.get(field, []) is list ? data.get(field, []) : [];
+    }
+
+    function numOf(data, field) {
+      return data.get(field, 0) is number ? data.get(field, 0) : 0;
+    }
+
     // The keys changed inside one nested map (works whether the client sent
     // the whole map or a dotted path).
     function changedInside(field) {
-      return request.resource.data.get(field, {}).diff(resource.data.get(field, {})).affectedKeys();
+      return mapOf(request.resource.data, field).diff(mapOf(resource.data, field)).affectedKeys();
+    }
+
+    // A list that was only added to: it is still a list and everything that
+    // was in it is still there.
+    function grew(newData, oldData, field) {
+      return newData.get(field, []) is list && newData.get(field, []).hasAll(listOf(oldData, field));
+    }
+
+    function onlyAddedTo(field) {
+      return unchanged(field) || grew(request.resource.data, resource.data, field);
+    }
+
+    function onlyAddedInside(mapField, key) {
+      return !changedInside(mapField).hasAny([key])
+        || grew(mapOf(request.resource.data, mapField), mapOf(resource.data, mapField), key);
+    }
+
+    // A number that stayed a number and did not go up / did not go down.
+    function notRaised(field) {
+      return unchanged(field)
+        || (request.resource.data.get(field, 0) is number && request.resource.data.get(field, 0) <= numOf(resource.data, field));
+    }
+
+    function notLowered(field) {
+      return unchanged(field)
+        || (request.resource.data.get(field, 0) is number && request.resource.data.get(field, 0) >= numOf(resource.data, field));
     }
 
     // The shared number counters. Both apps find the record, then add one to a
@@ -219,7 +260,13 @@ service cloud.firestore {
       function customerChange() {
         return changedKeys().hasOnly(['product_review', 'product_notify_list', 'updated_at', 'product_authorizer', 'product_marketing'])
           && changedInside('product_authorizer').hasOnly(['creator_id_list'])
-          && changedInside('product_marketing').hasOnly(['promotion', 'product_sales_history']);
+          && changedInside('product_marketing').hasOnly(['promotion', 'product_sales_history'])
+          // the app only ever adds to these lists
+          && onlyAddedTo('product_review')
+          && onlyAddedTo('product_notify_list')
+          && onlyAddedInside('product_authorizer', 'creator_id_list')
+          && onlyAddedInside('product_marketing', 'promotion')
+          && onlyAddedInside('product_marketing', 'product_sales_history');
       }
 
       allow read: if true;
@@ -277,7 +324,8 @@ service cloud.firestore {
       allow update: if isOffice()
         || (signedIn()
           && changedKeys().hasOnly(['coupon_used_user_list', 'coupon_limit'])
-          && request.resource.data.get('coupon_limit', 0) <= resource.data.get('coupon_limit', 0));
+          && notRaised('coupon_limit')
+          && onlyAddedTo('coupon_used_user_list'));
       allow create, delete: if isOffice();
     }
 
@@ -302,17 +350,23 @@ service cloud.firestore {
     match /inventory/{document} {
       function purchase() {
         return changedKeys().hasOnly(['stock', 'stock_reserved', 'updated_at'])
-          && request.resource.data.get('stock', 0) <= resource.data.get('stock', 0)
-          && request.resource.data.get('stock_reserved', 0) >= resource.data.get('stock_reserved', 0);
+          && notRaised('stock')
+          && notLowered('stock_reserved');
+      }
+      // A designer's stock record: it names them, or it belongs to their product
+      // (a few old records name nobody, or are out of step with their product).
+      function designerOwns() {
+        return resource.data.get('designer_uid', '') == request.auth.uid
+          || (resource.data.get('product_ref', null) is path
+            && exists(resource.data.product_ref)
+            && get(resource.data.product_ref).data.get(['product_authorizer', 'product_designer_id'], '') == request.auth.uid);
       }
 
       allow read: if true;
       allow create: if isOffice()
         || (isDesigner() && request.resource.data.get('designer_uid', '') == request.auth.uid);
       allow update: if isOffice()
-        || (isDesigner()
-          && resource.data.get('designer_uid', '') == request.auth.uid
-          && request.resource.data.get('designer_uid', '') == request.auth.uid)
+        || (isDesigner() && designerOwns() && unchanged('designer_uid'))
         || (signedIn() && purchase());
       allow delete: if isOffice();
     }
@@ -396,7 +450,7 @@ service cloud.firestore {
       allow read: if signedIn();
       allow create: if isOffice();
       allow update: if isOffice()
-        || (signedIn() && changedKeys().hasOnly(['sale_history', 'updated_at']));
+        || (signedIn() && changedKeys().hasOnly(['sale_history', 'updated_at']) && onlyAddedTo('sale_history'));
       allow delete: if isSuperAdmin();
     }
 

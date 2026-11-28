@@ -362,11 +362,87 @@ async function customerLimits(env) {
   await ok(updateDoc(doc(admin, "sales_history", "s-designer1"), { last_payout_amount: 5, updated_at: now }), "office records a payout on a sales record");
 }
 
+/*
+ * Old records are not always tidy: a number stored as text or left empty, a
+ * map that is empty. The after-payment writes must still go through on those
+ * (a refusal there strands a customer who has already paid), and a customer
+ * still may not use them to break the limits.
+ */
+async function untidyRecords(env) {
+  await seedWorld(env);
+  await seedDocs(env, "inventory", (db) => ({
+    "i-null": { designer_uid: "designer2", stock: null, stock_reserved: null },
+    "i-text": { designer_uid: "designer2", stock: "10", stock_reserved: "0" },
+    "i-bare": { designer_uid: "designer2" },
+    "i-mismatch": { designer_uid: "designer2", product_ref: doc(db, "products", "p-designer1"), stock: 3, stock_reserved: 0, threshold_stock: 1 },
+    "i-nodesigner": { product_ref: doc(db, "products", "p-designer1"), stock: 3, stock_reserved: 0 },
+    "i-orphan": { stock: 3, stock_reserved: 0 },
+  }));
+  await seedDocs(env, "coupon", {
+    "cp-null": { coupon_status: "active", coupon_limit: null, coupon_used_user_list: null },
+    "cp-text": { coupon_status: "active", coupon_limit: "5" },
+    "cp-used": { coupon_status: "active", coupon_limit: 3, coupon_used_user_list: [{ user_id: "cust2" }] },
+  });
+  await seedDocs(env, "products", {
+    "p-nullmaps": { status: "active", product_marketing: null, product_authorizer: null, product_notify_list: null },
+    "p-bare": { status: "active" },
+    "p-reviewed": { status: "active", product_review: [{ review_id: "1", customer_id: "cust2", review_rate: 5 }], product_notify_list: ["cust2@example.test"], product_marketing: { product_sales_history: [{ order_id: "A1", quantity: 1 }] } },
+  });
+  await seedDocs(env, "sales_history", { "s-lines": { sale_history: [{ sale_order_id: "A1", sale_amount: 20 }], total_earning: 20 }, "s-null": { sale_history: null } });
+  const cust1 = dbOf(env, "cust1");
+  const designer1 = dbOf(env, "designer1");
+  const now = Timestamp.now();
+  const buy = { updated_at: now, stock_reserved: increment(1), stock: increment(-1) };
+
+  // ---- the app's after-payment writes on untidy records ----
+  for (const id of ["i-null", "i-text", "i-bare"]) {
+    await ok(updateDoc(doc(cust1, "inventory", id), buy), "purchase lowers stock on record " + id);
+  }
+  for (const id of ["cp-null", "cp-text"]) {
+    await ok(updateDoc(doc(cust1, "coupon", id), { coupon_used_user_list: arrayUnion({ user_id: "cust1" }), coupon_limit: increment(-1) }), "purchase uses coupon " + id);
+  }
+  for (const id of ["p-nullmaps", "p-bare"]) {
+    await ok(updateDoc(doc(cust1, "products", id), { updated_at: now, "product_marketing.product_sales_history": arrayUnion({ order_id: "A2", quantity: 1 }) }), "purchase records a sale on product " + id);
+    await ok(updateDoc(doc(cust1, "products", id), { product_notify_list: arrayUnion("cust1@example.test") }), "notify me on product " + id);
+    await ok(updateDoc(doc(cust1, "products", id), { "product_authorizer.creator_id_list": arrayUnion("cust1"), "product_marketing.promotion": arrayUnion({ promotion_id: "P" }) }), "creator promotes product " + id);
+  }
+  await ok(updateDoc(doc(cust1, "sales_history", "s-null"), { updated_at: now, sale_history: arrayUnion({ sale_order_id: "A2" }) }), "purchase adds a sale line to a record with no list yet");
+
+  // ---- ...and a customer still cannot use them to get round the limits ----
+  await no(updateDoc(doc(cust1, "inventory", "i-designer2"), { stock: "lots" }), "customer sets stock to text");
+  await no(updateDoc(doc(cust1, "inventory", "i-designer2"), { stock: null }), "customer blanks stock");
+  await no(updateDoc(doc(cust1, "inventory", "i-designer2"), { stock_reserved: "0" }), "customer sets reserved stock to text");
+  await no(updateDoc(doc(cust1, "inventory", "i-text"), { stock: 500 }), "customer sets a large stock on a record whose stock was text");
+  await no(updateDoc(doc(cust1, "coupon", "cp-text"), { coupon_limit: 500 }), "customer sets a large limit on a coupon whose limit was text");
+  await no(updateDoc(doc(cust1, "coupon", "cp1"), { coupon_limit: "unlimited" }), "customer sets a coupon limit to text");
+
+  // ---- lists the app only ever adds to ----
+  await no(updateDoc(doc(cust1, "coupon", "cp-used"), { coupon_used_user_list: [] }), "customer clears a coupon's used list to use it again");
+  await no(updateDoc(doc(cust1, "coupon", "cp-used"), { coupon_used_user_list: [{ user_id: "cust1" }] }), "customer replaces a coupon's used list");
+  await ok(updateDoc(doc(cust1, "coupon", "cp-used"), { coupon_used_user_list: arrayUnion({ user_id: "cust1" }), coupon_limit: increment(-1) }), "customer's own use is added to the list");
+  await no(updateDoc(doc(cust1, "sales_history", "s-lines"), { sale_history: [{ sale_order_id: "A1", sale_amount: 0 }] }), "customer zeroes a designer's sale line");
+  await no(updateDoc(doc(cust1, "sales_history", "s-lines"), { sale_history: [] }), "customer empties a designer's sale lines");
+  await ok(updateDoc(doc(cust1, "sales_history", "s-lines"), { sale_history: arrayUnion({ sale_order_id: "A3", sale_amount: 5 }), updated_at: now }), "a new sale line is added");
+  await no(updateDoc(doc(cust1, "products", "p-reviewed"), { product_review: [] }), "customer removes other people's ratings");
+  await no(updateDoc(doc(cust1, "products", "p-reviewed"), { product_notify_list: [] }), "customer removes other people's notify-me emails");
+  await no(updateDoc(doc(cust1, "products", "p-reviewed"), { "product_marketing.product_sales_history": [] }), "customer wipes a product's sales list");
+  await ok(updateDoc(doc(cust1, "products", "p-reviewed"), { product_review: arrayUnion({ review_id: "2", customer_id: "cust1", review_rate: 4 }), updated_at: now }), "a new rating is added");
+
+  // ---- a stock record whose designer field is missing or out of step with its product ----
+  await ok(updateDoc(doc(designer1, "inventory", "i-mismatch"), { threshold_stock: 4, updated_at: now }), "designer saves the stock record of their own product, though it names another designer");
+  await ok(updateDoc(doc(designer1, "inventory", "i-nodesigner"), { threshold_stock: 4, updated_at: now }), "designer saves the stock record of their own product, though it names no designer");
+  await ok(updateDoc(doc(dbOf(env, "designer2"), "inventory", "i-mismatch"), { threshold_stock: 5 }), "the designer named on the stock record can save it too");
+  await no(updateDoc(doc(designer1, "inventory", "i-orphan"), { threshold_stock: 4 }), "designer changes a stock record tied to nobody");
+  await no(updateDoc(doc(designer1, "inventory", "i-mismatch"), { designer_uid: "designer1" }), "designer re-labels a stock record as their own");
+  await ok(updateDoc(doc(dbOf(env, "admin1"), "inventory", "i-orphan"), { designer_uid: "designer1" }), "office repairs a stock record's designer");
+}
+
 async function runAttacks(env) {
   await identity(env);
   await privateRecords(env);
   await shop(env);
   await customerLimits(env);
+  await untidyRecords(env);
 }
 
 module.exports = { runAttacks };
