@@ -51,6 +51,53 @@ service cloud.firestore {
       return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
 
+    // Old records are not always tidy (a number stored as text, a blank where
+    // a list or map should be). These read a field as what it should be, so a
+    // legitimate write on such a record is not refused by accident.
+    function mapOf(data, field) {
+      return data.get(field, {}) is map ? data.get(field, {}) : {};
+    }
+
+    function listOf(data, field) {
+      return data.get(field, []) is list ? data.get(field, []) : [];
+    }
+
+    function numOf(data, field) {
+      return data.get(field, 0) is number ? data.get(field, 0) : 0;
+    }
+
+    // The keys changed inside one nested map (works whether the client sent
+    // the whole map or a dotted path).
+    function changedInside(field) {
+      return mapOf(request.resource.data, field).diff(mapOf(resource.data, field)).affectedKeys();
+    }
+
+    // A list that was only added to: it is still a list and everything that
+    // was in it is still there.
+    function grew(newData, oldData, field) {
+      return newData.get(field, []) is list && newData.get(field, []).hasAll(listOf(oldData, field));
+    }
+
+    function onlyAddedTo(field) {
+      return unchanged(field) || grew(request.resource.data, resource.data, field);
+    }
+
+    function onlyAddedInside(mapField, key) {
+      return !changedInside(mapField).hasAny([key])
+        || grew(mapOf(request.resource.data, mapField), mapOf(resource.data, mapField), key);
+    }
+
+    // A number that stayed a number and did not go up / did not go down.
+    function notRaised(field) {
+      return unchanged(field)
+        || (request.resource.data.get(field, 0) is number && request.resource.data.get(field, 0) <= numOf(resource.data, field));
+    }
+
+    function notLowered(field) {
+      return unchanged(field)
+        || (request.resource.data.get(field, 0) is number && request.resource.data.get(field, 0) >= numOf(resource.data, field));
+    }
+
     // The shared number counters. Both apps find the record, then add one to a
     // counter, while signed in. (Issuing numbers from the back office is stage 2.)
     match /id_map/{document} {
@@ -158,9 +205,25 @@ service cloud.firestore {
     // an order up by its number alone, and designers load the list unfiltered
     // (owner-only reads need those queries changed first: stage 2).
     match /orders/{document} {
+      // What the customer app writes on the buyer's own order after creating it.
+      // It can still mark its own order paid; confirming payment in the back
+      // office is stage 2.
+      function buyerChange() {
+        return resource.data.get('customer_id', '') == request.auth.uid
+          && changedKeys().hasOnly([
+            'shipping_address', 'shipping_info',
+            'payment_id', 'payment_method', 'payment_type', 'payment_status', 'order_status',
+            'ready_shipping_request_status', 'custom_shipping_request_status',
+            'return_request_id', 'updated_at'
+          ]);
+      }
+
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.get('customer_id', '') == request.auth.uid;
-      allow update: if signedIn();
+      allow update: if isOffice()
+        || (signedIn() && buyerChange())
+        // the panel's "line ready": a designer rewrites the item list
+        || (isDesigner() && changedKeys().hasOnly(['order_items', 'updated_at']));
       allow delete: if isSuperAdmin();
     }
 
@@ -183,12 +246,38 @@ service cloud.firestore {
       allow create, delete: if isOffice();
     }
 
-    // Products. The customer app adds sales, notify-me emails and creator
-    // promotions to a product after login.
+    // Products. A designer manages their own; the office manages all. The
+    // customer app adds only sales, ratings, notify-me emails and creator
+    // promotions.
     match /products/{document} {
+      function designerOf(data) {
+        return data.get(['product_authorizer', 'product_designer_id'], '');
+      }
+      // Approval is the office's: a designer sends a product for review or archives it.
+      function designerStatus() {
+        return request.resource.data.get('status', '') in ['request', 'archived'];
+      }
+      function customerChange() {
+        return changedKeys().hasOnly(['product_review', 'product_notify_list', 'updated_at', 'product_authorizer', 'product_marketing'])
+          && changedInside('product_authorizer').hasOnly(['creator_id_list'])
+          && changedInside('product_marketing').hasOnly(['promotion', 'product_sales_history'])
+          // the app only ever adds to these lists
+          && onlyAddedTo('product_review')
+          && onlyAddedTo('product_notify_list')
+          && onlyAddedInside('product_authorizer', 'creator_id_list')
+          && onlyAddedInside('product_marketing', 'promotion')
+          && onlyAddedInside('product_marketing', 'product_sales_history');
+      }
+
       allow read: if true;
-      allow create: if isStaff();
-      allow update: if signedIn();
+      allow create: if isOffice()
+        || (isDesigner() && designerOf(request.resource.data) == request.auth.uid && designerStatus());
+      allow update: if isOffice()
+        || (isDesigner()
+          && designerOf(resource.data) == request.auth.uid
+          && designerOf(request.resource.data) == request.auth.uid
+          && (unchanged('status') || designerStatus()))
+        || (signedIn() && customerChange());
       allow delete: if isOffice();
     }
 
@@ -228,10 +317,15 @@ service cloud.firestore {
       allow read, write: if isOffice();
     }
 
-    // Coupons. The customer app records each use after payment.
+    // Coupons. After payment the customer app adds the buyer to the used list
+    // and takes one off the limit; nothing else on a coupon is a customer's to change.
     match /coupon/{document} {
       allow read: if signedIn();
-      allow update: if signedIn();
+      allow update: if isOffice()
+        || (signedIn()
+          && changedKeys().hasOnly(['coupon_used_user_list', 'coupon_limit'])
+          && notRaised('coupon_limit')
+          && onlyAddedTo('coupon_used_user_list'));
       allow create, delete: if isOffice();
     }
 
@@ -251,11 +345,29 @@ service cloud.firestore {
       allow read, write: if isOffice();
     }
 
-    // Stock. The customer app lowers it after payment.
+    // Stock. A designer manages their own record; the office manages all. The
+    // customer app only moves stock from "available" to "reserved" after payment.
     match /inventory/{document} {
+      function purchase() {
+        return changedKeys().hasOnly(['stock', 'stock_reserved', 'updated_at'])
+          && notRaised('stock')
+          && notLowered('stock_reserved');
+      }
+      // A designer's stock record: it names them, or it belongs to their product
+      // (a few old records name nobody, or are out of step with their product).
+      function designerOwns() {
+        return resource.data.get('designer_uid', '') == request.auth.uid
+          || (resource.data.get('product_ref', null) is path
+            && exists(resource.data.product_ref)
+            && get(resource.data.product_ref).data.get(['product_authorizer', 'product_designer_id'], '') == request.auth.uid);
+      }
+
       allow read: if true;
-      allow create: if isStaff();
-      allow update: if signedIn();
+      allow create: if isOffice()
+        || (isDesigner() && request.resource.data.get('designer_uid', '') == request.auth.uid);
+      allow update: if isOffice()
+        || (isDesigner() && designerOwns() && unchanged('designer_uid'))
+        || (signedIn() && purchase());
       allow delete: if isOffice();
     }
 
@@ -332,11 +444,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Each designer's and creator's sales record. The customer app adds a line
-    // after payment.
+    // Each designer's and creator's sales record. The customer app adds a sale
+    // line after payment; the amounts are the office's.
     match /sales_history/{document} {
-      allow read, update: if signedIn();
+      allow read: if signedIn();
       allow create: if isOffice();
+      allow update: if isOffice()
+        || (signedIn() && changedKeys().hasOnly(['sale_history', 'updated_at']) && onlyAddedTo('sale_history'));
       allow delete: if isSuperAdmin();
     }
 

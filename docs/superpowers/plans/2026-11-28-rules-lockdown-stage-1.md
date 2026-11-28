@@ -177,3 +177,5 @@ Collections: `settings`, `id_map`, `category`, `tags`, `attributes`, `brands`, `
 - **Two more order fields (Release B).** The MyFatoorah path also writes `ready_shipping_request_status` and `custom_shipping_request_status` on the customer's own order (`checkout_payment_method_widget.dart:748`). They are added to the allowed list.
 - **`users` create** is own-record-only for everyone, including office, exactly as the spec says: the panel never creates a record for someone else.
 - **`transactions` read** for a non-office account needs the `designer` role as well as being named in `user_ref`.
+- **A designer cannot approve their own product (Release B).** The spec gave a designer "any field" on their own product. The rules add one limit: a designer may leave `status` unchanged or set it to `request` or `archived`, and a new product must start as `request`. The panel never sends anything else under a designer login; approval is a super-admin action.
+- **A designer creates stock records and products only in their own name (Release B).**

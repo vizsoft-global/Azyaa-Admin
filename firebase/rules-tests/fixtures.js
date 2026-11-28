@@ -16,7 +16,7 @@ function world(db) {
     product_info: { name: "Dress " + code, short_description: "s", description: "d", feature_image: "u", gallery_image: [] },
     product: { product_price: 20, product_sale_price: 18, product_type: "ready", SKU: 1001, inventory_ref: doc(db, "inventory", "i-" + designer), inventory_id: "INV1" },
     product_authorizer: { product_designer_id: designer, product_designer_ref: user(designer), is_affiliate_product: false, is_virtualtryon_status: false, creator_id_list: [] },
-    product_marketing: { is_featue_product: false, is_recommended_product: false, is_popular_product: false, promotion: [], product_sales_history: { total_sales: 0 } },
+    product_marketing: { is_featue_product: false, is_recommended_product: false, is_popular_product: false, promotion: [], product_sales_history: [] },
     product_attribute: [],
     product_review: [],
     product_notify_list: [],
