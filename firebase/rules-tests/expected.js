@@ -12,6 +12,7 @@
 const { doc, where } = require("firebase/firestore");
 
 const plain = () => ({ id: "seed", status: "pending" });
+const person = (db, id) => doc(db, "users", id);
 
 const TABLE = {
   // Reads only here; who may create and change a users record is in attacks.test.js.
@@ -32,6 +33,63 @@ const TABLE = {
     doc: plain,
     rows: { anon: "", customer: "", designer: "get list", office: "get list", super: "all" },
   },
+
+  // ---- private collections ----
+  delivery_login_creds: {
+    doc: () => ({ email: "driver@example.test", display_name: "Driver", status: "active" }),
+    rows: { anon: "", customer: "", designer: "", office: "all", super: "all" },
+  },
+  // Payouts with bank details. Office handles them; a designer sees their own.
+  transactions: {
+    owned: true,
+    doc: (db, owner) => ({ user_ref: person(db, owner), status: "pending", payout_amount: 1, IBAN: "KW00TEST" }),
+    otherOwner: (persona) => (persona === "designer2" ? "designer1" : "designer2"),
+    listFilter: (db, persona, owner) => [where("user_ref", "==", person(db, owner))],
+    rows: {
+      anon: "",
+      customer: "",
+      designer: { own: "get list", other: "" },
+      office: "get list create update",
+      super: "get list create update",
+    },
+  },
+  // Outgoing email: anyone signed in may queue one, nobody reads them back.
+  mail: {
+    doc: () => ({ to: "someone@example.test", message: { subject: "s", html: "h" } }),
+    rows: { anon: "", customer: "create", designer: "create", office: "create", super: "create" },
+  },
+  notification: {
+    owned: true,
+    doc: (db, owner) => ({ to_userRef: person(db, owner), message: "m", mark_as_read: false }),
+    listFilter: (db, persona, owner) => [where("to_userRef", "==", person(db, owner))],
+    update: () => ({ mark_as_read: true }),
+    rows: {
+      anon: "",
+      customer: { own: "get list create update", other: "create" },
+      designer: { own: "get list create update", other: "create" },
+      office: "all",
+      super: "all",
+    },
+  },
+  user_waitlist: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+  user_referral_activities: {
+    doc: plain,
+    rows: { anon: "", customer: "create update", designer: "create update", office: "all", super: "all" },
+  },
+  store_valley_inventory: {
+    doc: plain,
+    rows: { anon: "", customer: "", designer: "get list", office: "get list", super: "get list" },
+  },
+  inventorymovementlog: {
+    doc: plain,
+    rows: { anon: "", customer: "", designer: "get list create update", office: "get list create update", super: "all" },
+  },
+  images: { doc: plain, rows: { anon: "", customer: "", designer: "all", office: "all", super: "all" } },
+  videos: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+  services: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+  subscriptions: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+  review: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+  banners: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
 };
 
-module.exports = { TABLE, plain, doc, where };
+module.exports = { TABLE, plain };

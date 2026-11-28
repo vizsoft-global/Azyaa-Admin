@@ -2,8 +2,9 @@
  * Things an outsider or a curious customer might try. Each must be refused;
  * the legitimate neighbour of each attack must still be allowed.
  */
-const { doc, getDoc, setDoc, updateDoc, deleteDoc, arrayUnion } = require("firebase/firestore");
+const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, collection, query, where, limit } = require("firebase/firestore");
 const { dbOf, seedDocs, ok, no, personRecord, PEOPLE } = require("./lib");
+const { seedWorld } = require("./fixtures");
 
 const STAFF_ROLES = ["super_admin", "admin", "shop_manager", "designer"];
 
@@ -115,8 +116,56 @@ async function identity(env) {
   await ok(updateDoc(doc(superDb, "roles", "designer"), { permissions_list: ["dashboard", "product"] }), "super admin edits a role");
 }
 
+async function privateRecords(env) {
+  await seedWorld(env);
+  const anon = dbOf(env, "anon");
+  const cust1 = dbOf(env, "cust1");
+  const designer1 = dbOf(env, "designer1");
+  const person = (db, id) => doc(db, "users", id);
+
+  // ---- things nobody outside the office should read ----
+  for (const [who, db] of [["signed-out", anon], ["customer", cust1]]) {
+    await no(getDoc(doc(db, "mail", "ml1")), who + " reads a sent email (it carries a delivery code)");
+    await no(getDocs(query(collection(db, "mail"), limit(5))), who + " lists sent emails");
+    await no(getDoc(doc(db, "delivery_login_creds", "dp1")), who + " reads a delivery partner login");
+    await no(getDoc(doc(db, "transactions", "tr-designer1")), who + " reads a designer's bank details");
+    await no(getDocs(query(collection(db, "transactions"), limit(5))), who + " lists payouts");
+    await no(getDocs(query(collection(db, "user_waitlist"), limit(5))), who + " lists the waitlist");
+    await no(getDocs(query(collection(db, "images"), limit(5))), who + " lists the media library");
+  }
+  await no(getDoc(doc(designer1, "mail", "ml1")), "designer reads a sent email");
+  await no(getDoc(doc(dbOf(env, "super1"), "mail", "ml1")), "even a super admin does not read mail through the apps");
+  await no(getDoc(doc(designer1, "delivery_login_creds", "dp1")), "designer reads a delivery partner login");
+  await no(getDocs(query(collection(designer1, "transactions"), where("user_ref", "==", person(designer1, "designer2")))), "designer lists another designer's payouts");
+  await no(getDocs(query(collection(designer1, "transactions"), limit(5))), "designer lists all payouts");
+  // A customer whose record is named on a payout still does not get it: only designers and office.
+  await seedDocs(env, "transactions", (db) => ({ "tr-cust1": { user_ref: doc(db, "users", "cust1"), IBAN: "KW00" } }));
+  await no(getDoc(doc(cust1, "transactions", "tr-cust1")), "customer reads a payout naming them");
+
+  // ---- mail: queue only ----
+  await no(setDoc(doc(anon, "mail", "x1"), { to: "victim@example.test", message: { subject: "s", html: "h" } }), "signed-out sends mail as Azyaa");
+  await ok(setDoc(doc(cust1, "mail", "x2"), { to: "cust1@example.test", message: { subject: "OTP from Azyaa", html: "h" } }), "signed-in customer queues their OTP mail");
+  await no(updateDoc(doc(cust1, "mail", "ml1"), { to: "other@example.test" }), "customer redirects a queued mail");
+  await no(deleteDoc(doc(cust1, "mail", "ml1")), "customer deletes a mail");
+  await no(setDoc(doc(cust1, "mail", "ml1"), { to: "other@example.test" }), "customer overwrites an existing mail");
+
+  // ---- notifications ----
+  await no(getDoc(doc(cust1, "notification", "n-cust2")), "customer reads someone else's notification");
+  await no(getDocs(query(collection(cust1, "notification"), limit(5))), "customer lists all notifications");
+  await no(updateDoc(doc(cust1, "notification", "n-cust2"), { message: "changed" }), "customer edits someone else's notification");
+  await no(deleteDoc(doc(cust1, "notification", "n-cust1")), "customer deletes a notification");
+  await no(setDoc(doc(anon, "notification", "x1"), { to_userRef: person(anon, "admin1"), message: "spam" }), "signed-out creates a notification");
+  await ok(getDoc(doc(dbOf(env, "admin1"), "notification", "n-cust2")), "office reads any notification");
+
+  // ---- warehouse and requests ----
+  await no(setDoc(doc(dbOf(env, "super1"), "store_valley_inventory", "x"), { available: 99 }), "nobody writes warehouse stock from the apps");
+  await no(updateDoc(doc(cust1, "inventorymovementlog", "m-designer1"), { product_quantity: 99 }), "customer edits a restock request");
+  await no(deleteDoc(doc(designer1, "inventorymovementlog", "m-designer1")), "designer deletes a restock request");
+}
+
 async function runAttacks(env) {
   await identity(env);
+  await privateRecords(env);
 }
 
 module.exports = { runAttacks };

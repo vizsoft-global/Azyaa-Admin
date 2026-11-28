@@ -106,11 +106,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Referral log, written by the customer app at registration.
     match /user_referral_activities/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if isOffice();
+      allow create, update: if signedIn();
+      allow delete: if isOffice();
     }
 
     match /user_membership_plans/{document} {
@@ -127,25 +127,22 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // The panel's media library.
     match /images/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
+    // Not used by the customer app today: office only.
     match /videos/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Outgoing email, sent by the Trigger Email extension. Both apps queue
+    // mail while signed in; nobody reads it back (delivery codes are mailed).
     match /mail/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if false;
+      allow create: if signedIn();
+      allow update, delete: if false;
     }
 
     match /orders/{document} {
@@ -162,11 +159,9 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Not used by the customer app today: office only.
     match /services/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     match /category/{document} {
@@ -183,18 +178,14 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Not used by the customer app today: office only.
     match /subscriptions/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Not used by the customer app today: office only.
     match /review/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     match /tags/{document} {
@@ -218,11 +209,9 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Not used by the customer app today: office only.
     match /banners/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     match /coupon/{document} {
@@ -243,11 +232,9 @@ service cloud.firestore {
       allow create, update, delete: if isSuperAdmin();
     }
 
+    // Waitlist requests: office only (the app feature is switched off).
     match /user_waitlist/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     match /inventory/{document} {
@@ -257,18 +244,16 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Warehouse stock as Store Valley reports it: written by the back office only.
     match /store_valley_inventory/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if false;
     }
 
+    // Restock, pickup and return requests between designers and the warehouse.
     match /inventorymovementlog/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, create, update: if isStaff();
+      allow delete: if isSuperAdmin();
     }
 
     match /return_requests/{document} {
@@ -278,11 +263,9 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Delivery partner logins: office only.
     match /delivery_login_creds/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     // Shipments and pickups. The customer app reads these to show order
@@ -324,10 +307,11 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Payouts, with bank details. Office handles them; a designer sees their own.
     match /transactions/{document} {
-      allow create: if request.auth != null;
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read: if isOffice()
+        || (isDesigner() && resource.data.user_ref == myUserPath());
+      allow create, update: if isOffice();
       allow delete: if false;
     }
 
@@ -345,11 +329,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // In-app notifications: read and ticked off by the person they are
+    // addressed to. The customer app creates them for designers and the office.
     match /notification/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      function addressedToMe() {
+        return signedIn() && resource.data.to_userRef == myUserPath();
+      }
+      allow read: if addressedToMe() || isOffice();
+      allow create: if signedIn();
+      allow update: if addressedToMe() || isOffice();
+      allow delete: if isOffice();
     }
   }
 }
