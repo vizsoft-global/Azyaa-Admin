@@ -1,211 +1,290 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ---- who is asking ----
     function signedIn() {
       return request.auth != null;
     }
 
-    // Panel staff: the caller's own users record (its id is the login id) carries a panel role.
+    function isMe(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function myUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // The role on a users record; a missing, empty or null role is "no role".
+    function roleOf(data) {
+      return data.get('role_unique_key', '') == null ? '' : data.get('role_unique_key', '');
+    }
+
+    // The caller's panel role, read from the record filed under their login id
+    // as it is before this request. '' when signed out or without a record.
+    function myRole() {
+      return signedIn() && exists(myUserPath()) ? roleOf(get(myUserPath()).data) : '';
+    }
+
+    // Panel staff: designers and office.
     function isStaff() {
-      return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role_unique_key
-          in ['super_admin', 'admin', 'shop_manager', 'designer'];
+      return myRole() in ['super_admin', 'admin', 'shop_manager', 'designer'];
     }
 
+    function isOffice() {
+      return myRole() in ['super_admin', 'admin', 'shop_manager'];
+    }
+
+    function isSuperAdmin() {
+      return myRole() == 'super_admin';
+    }
+
+    function isDesigner() {
+      return myRole() == 'designer';
+    }
+
+    // ---- what is being changed ----
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function unchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
+    }
+
+    // The shared number counters. Both apps find the record, then add one to a
+    // counter, while signed in. (Issuing numbers from the back office is stage 2.)
     match /id_map/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow update: if signedIn() && unchanged('type');
+      allow create, delete: if false;
     }
 
-    match /users/{document} {
-      allow create: if true;
+    // People. Readable by everyone for now: guests browse designers and
+    // creators from these records (splitting them is stage 2).
+    match /users/{userId} {
+      // A role is only ever given by office staff; `super_admin` only by a super admin.
+      function keepsRole() {
+        return roleOf(request.resource.data) == roleOf(resource.data);
+      }
+      // `user_role` is a label, not access, but only these two are ever written by the apps.
+      function plainUserRole() {
+        return !('user_role' in request.resource.data)
+          || request.resource.data.user_role in ['Customer', 'Admin'];
+      }
+      function keepsOrPlainUserRole() {
+        return unchanged('user_role') || request.resource.data.user_role in ['Customer', 'Admin'];
+      }
+      function sameSuperAdminStanding() {
+        return (roleOf(request.resource.data) == 'super_admin') == (roleOf(resource.data) == 'super_admin');
+      }
+
+      // Approval as a designer or creator is given by the office. Neither app
+      // writes these two fields on the person's own record.
+      function approvals(data) {
+        return [
+          data.get(['designer_main_info', 'designer_status'], null),
+          data.get(['creator_main_info', 'creator_status'], null)
+        ];
+      }
+
+      // A record may only carry its own login id. (The panel finds a person by
+      // `uid`; a second record claiming a staff uid would lock that person out.)
+      function ownUid() {
+        return request.resource.data.get('uid', userId) == userId;
+      }
+
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+
+      // Your own record, under your own login id, with no panel role in it.
+      // (The panel never creates a record for someone else; it only changes existing ones.)
+      allow create: if isMe(userId) && roleOf(request.resource.data) == '' && plainUserRole()
+        && approvals(request.resource.data) == [null, null]
+        && ownUid();
+
+      allow update: if
+        // your own record: anything but your role and your approvals
+        (isMe(userId) && keepsRole() && keepsOrPlainUserRole()
+          && approvals(request.resource.data) == approvals(resource.data)
+          && (unchanged('uid') || ownUid()))
+        // office: anything, except giving or taking away super admin
+        || isSuperAdmin()
+        || (isOffice() && sameSuperAdminStanding())
+        // the customer app pays the referral bonus onto the referrer's record
+        || (signedIn() && changedKeys().hasOnly(['points_balance', 'user_vto']));
+
+      allow delete: if isSuperAdmin();
     }
 
+    // Referral log, written by the customer app at registration.
     match /user_referral_activities/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if isOffice();
+      allow create, update: if signedIn();
+      allow delete: if isOffice();
     }
 
+    // Plans shown in the customer app; edited by the office.
     match /user_membership_plans/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow write: if isOffice();
     }
 
+    // Shop settings. The customer app reads them before login.
+    // (They still hold the payment keys; moving those out is stage 2.)
     match /settings/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow update: if isOffice();
+      allow create, delete: if isSuperAdmin();
     }
 
+    // The panel's media library.
     match /images/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isStaff();
     }
 
+    // Not used by the customer app today: office only.
     match /videos/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Outgoing email, sent by the Trigger Email extension. Both apps queue
+    // mail while signed in; nobody reads it back (delivery codes are mailed).
     match /mail/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if false;
+      allow create: if signedIn();
+      allow update, delete: if false;
     }
 
+    // Orders. Readable by any signed-in account for now: the customer app looks
+    // an order up by its number alone, and designers load the list unfiltered
+    // (owner-only reads need those queries changed first: stage 2).
     match /orders/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.get('customer_id', '') == request.auth.uid;
+      allow update: if signedIn();
+      allow delete: if isSuperAdmin();
     }
 
+    // Payment results, written by the payment hook with no login. Left open
+    // until the back office confirms payments itself (stage 2).
     match /payment_response/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, create, update: if true;
+      allow delete: if isSuperAdmin();
     }
 
+    // Not used by the customer app today: office only.
     match /services/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Catalogue lists. A designer's product save and the translation page change them.
     match /category/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update: if isStaff();
+      allow create, delete: if isOffice();
     }
 
+    // Products. The customer app adds sales, notify-me emails and creator
+    // promotions to a product after login.
     match /products/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow create: if isStaff();
+      allow update: if signedIn();
+      allow delete: if isOffice();
     }
 
+    // Not used by the customer app today: office only.
     match /subscriptions/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Not used by the customer app today: office only.
     match /review/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Catalogue lists. A designer's product save and the translation page change them.
     match /tags/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update: if isStaff();
+      allow create, delete: if isOffice();
     }
 
+    // Catalogue lists. A designer's product save and the translation page change them.
     match /brands/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update: if isStaff();
+      allow create, delete: if isOffice();
     }
 
+    // Catalogue lists. A designer's product save and the translation page change them.
     match /attributes/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow update: if isStaff();
+      allow create, delete: if isOffice();
     }
 
+    // Not used by the customer app today: office only.
     match /banners/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Coupons. The customer app records each use after payment.
     match /coupon/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow update: if signedIn();
+      allow create, delete: if isOffice();
     }
 
+    // Panel roles: every signed-in account reads its own role to build its menu.
     match /roles/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /permissions/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if isStaff();
+      allow create, update, delete: if isSuperAdmin();
     }
 
+    // Waitlist requests: office only (the app feature is switched off).
     match /user_waitlist/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
+    // Stock. The customer app lowers it after payment.
     match /inventory/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow create: if isStaff();
+      allow update: if signedIn();
+      allow delete: if isOffice();
     }
 
+    // Warehouse stock as Store Valley reports it: written by the back office only.
     match /store_valley_inventory/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read: if isStaff();
+      allow write: if false;
     }
 
+    // Restock, pickup and return requests between designers and the warehouse.
     match /inventorymovementlog/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, create, update: if isStaff();
+      allow delete: if isSuperAdmin();
     }
 
+    // Return requests: raised by the customer, handled by the office.
     match /return_requests/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      // A new request is always "Pending" and in the customer's own name.
+      allow create: if signedIn()
+        && request.resource.data.get('status', '') == 'Pending'
+        && request.resource.data.get('userRef', null) == myUserPath();
+      allow update: if isOffice();
+      allow delete: if isSuperAdmin();
     }
 
+    // Delivery partner logins: office only.
     match /delivery_login_creds/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read, write: if isOffice();
     }
 
     // Shipments and pickups. The customer app reads these to show order
@@ -215,11 +294,10 @@ service cloud.firestore {
       allow create, update, delete: if isStaff();
     }
 
+    // Try-on plans shown in the customer app; edited by the office.
     match /user_vto_plans/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow write: if isOffice();
     }
 
     // Store Valley's answers and latest status. Read by the customer app for
@@ -240,25 +318,26 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Edited by the office.
     match /theme/{document} {
-      allow create: if true;
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow write: if isOffice();
     }
 
+    // Payouts, with bank details. Office handles them; a designer sees their own.
     match /transactions/{document} {
-      allow create: if request.auth != null;
-      allow read: if true;
-      allow write: if request.auth != null;
+      allow read: if isOffice()
+        || (isDesigner() && resource.data.user_ref == myUserPath());
+      allow create, update: if isOffice();
       allow delete: if false;
     }
 
+    // Each designer's and creator's sales record. The customer app adds a line
+    // after payment.
     match /sales_history/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if true;
-      allow delete: if request.auth != null;
+      allow read, update: if signedIn();
+      allow create: if isOffice();
+      allow delete: if isSuperAdmin();
     }
 
     match /store_valley_delivery_jobs/{document} {
@@ -268,11 +347,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // In-app notifications: read and ticked off by the person they are
+    // addressed to. The customer app creates them for designers and the office.
     match /notification/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      function addressedToMe() {
+        return signedIn() && resource.data.to_userRef == myUserPath();
+      }
+      allow read: if addressedToMe() || isOffice();
+      allow create: if signedIn();
+      allow update: if addressedToMe() || isOffice();
+      allow delete: if isOffice();
     }
   }
 }

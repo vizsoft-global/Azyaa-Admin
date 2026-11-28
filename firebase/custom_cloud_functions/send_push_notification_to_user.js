@@ -1,7 +1,11 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { requireStaff } = require("./store_valley_staff.js");
 exports.sendPushNotificationToUser = functions.https.onCall(
   async (data, context) => {
+    // Office staff only: checked before anything else.
+    await requireStaff(context, { noDesigner: true });
+
     // --- Input Parameters from FlutterFlow ---
     const userId = data["userId"];
     const notificationTitle = data["notificationTitle"];
