@@ -3,7 +3,7 @@
  * the legitimate neighbour of each attack must still be allowed.
  */
 const { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, arrayUnion, collection, query, where, limit } = require("firebase/firestore");
-const { dbOf, seedDocs, ok, no, personRecord, PEOPLE } = require("./lib");
+const { dbOf, seedDocs, ok, no, personRecord, PEOPLE, newRules } = require("./lib");
 const { seedWorld } = require("./fixtures");
 
 const STAFF_ROLES = ["super_admin", "admin", "shop_manager", "designer"];
@@ -163,9 +163,77 @@ async function privateRecords(env) {
   await no(deleteDoc(doc(designer1, "inventorymovementlog", "m-designer1")), "designer deletes a restock request");
 }
 
+async function shop(env) {
+  await seedWorld(env);
+  const anon = dbOf(env, "anon");
+  const cust1 = dbOf(env, "cust1");
+  const designer1 = dbOf(env, "designer1");
+  const admin = dbOf(env, "admin1");
+  const superDb = dbOf(env, "super1");
+  const person = (db, id) => doc(db, "users", id);
+
+  // ---- nothing accepts a signed-out write, except the payment result ----
+  const names = [...newRules().matchAll(/match \/(\w+)\/\{\w+\}/g)].map((m) => m[1]);
+  if (names.length < 35) throw new Error("expected every collection in the rules file, found " + names.length);
+  for (const name of names) {
+    await seedDocs(env, name, { "open-check": { id: "open-check" }, "open-check-del": { id: "open-check" } });
+    const open = name === "payment_response";
+    await (open ? ok : no)(setDoc(doc(anon, name, "made-by-nobody"), { id: "x" }), "signed-out create in " + name);
+    await (open ? ok : no)(updateDoc(doc(anon, name, "open-check"), { id: "y" }), "signed-out change in " + name);
+    await no(deleteDoc(doc(anon, name, "open-check-del")), "signed-out delete in " + name);
+    // Nor may a plain customer delete anything, anywhere.
+    await no(deleteDoc(doc(cust1, name, "open-check-del")), "customer delete in " + name);
+  }
+
+  // ---- signed-out reads that are now closed ----
+  await no(getDoc(doc(anon, "orders", "o-cust1")), "signed-out reads an order");
+  await no(getDocs(query(collection(anon, "orders"), limit(5))), "signed-out lists orders");
+  await no(getDocs(query(collection(anon, "sales_history"), limit(5))), "signed-out lists sales records");
+  await no(getDocs(query(collection(anon, "coupon"), limit(5))), "signed-out lists coupons");
+  await no(getDocs(query(collection(anon, "return_requests"), limit(5))), "signed-out lists returns");
+
+  // ---- a customer does not edit the shop ----
+  await no(setDoc(doc(cust1, "products", "fake"), { status: "active", product_id: "FAKE" }), "customer creates a product");
+  await no(setDoc(doc(cust1, "inventory", "fake"), { stock: 999 }), "customer creates a stock record");
+  await no(setDoc(doc(cust1, "coupon", "fake"), { coupon_value: "FREE", coupon_price: 100 }), "customer creates a coupon");
+  await no(setDoc(doc(cust1, "category", "fake"), { status: "active" }), "customer creates a category");
+  await no(updateDoc(doc(cust1, "category", "c1"), { status: "archived" }), "customer changes a category");
+  await no(updateDoc(doc(cust1, "settings", "company"), { "settings_company_info.name": "Hacked" }), "customer changes settings");
+  await no(updateDoc(doc(cust1, "settings", "company"), { settings_payment_info: [] }), "customer replaces the payment gateways");
+  await no(setDoc(doc(cust1, "settings", "second"), { type: "Company" }), "customer creates a second settings record");
+  await no(updateDoc(doc(cust1, "user_membership_plans", "mp1"), { price: 0 }), "customer makes a plan free");
+  await no(updateDoc(doc(cust1, "user_vto_plans", "vp1"), { price: 0 }), "customer makes a try-on plan free");
+  await no(updateDoc(doc(cust1, "return_requests", "r1"), { status: "Accepted" }), "customer approves their own return");
+  await no(setDoc(doc(cust1, "sales_history", "fake"), { user_ref: person(cust1, "cust1"), total_earning: 999 }), "customer creates a sales record");
+
+  // ---- a designer is not the office ----
+  await no(updateDoc(doc(designer1, "settings", "company"), { "settings_company_info.name": "x" }), "designer changes settings");
+  await no(setDoc(doc(designer1, "coupon", "fake"), { coupon_value: "MINE" }), "designer creates a coupon");
+  await no(setDoc(doc(designer1, "category", "fake"), { status: "active" }), "designer creates a category");
+  await no(updateDoc(doc(designer1, "user_membership_plans", "mp1"), { price: 0 }), "designer edits a plan");
+  await no(updateDoc(doc(designer1, "return_requests", "r1"), { status: "Accepted" }), "designer approves a return");
+  await no(deleteDoc(doc(designer1, "products", "p-designer1")), "designer deletes a product (the panel archives instead)");
+
+  // ---- orders ----
+  await no(setDoc(doc(cust1, "orders", "forged-1"), { order_id: "X", customer_id: "cust2", order_status: "CAPTURED" }), "customer creates an order in someone else's name");
+  await no(setDoc(doc(cust1, "orders", "forged-2"), { order_id: "X", order_status: "CAPTURED" }), "customer creates an order with no customer");
+  await no(setDoc(doc(cust1, "orders", "forged-3"), { order_id: "X", customer_id: "", order_status: "CAPTURED" }), "customer creates an order with an empty customer");
+  await no(deleteDoc(doc(cust1, "orders", "o-cust1")), "customer deletes own order");
+  await no(deleteDoc(doc(admin, "orders", "o-cust2")), "admin deletes an order");
+  await ok(deleteDoc(doc(superDb, "orders", "o-cust2")), "super admin deletes an order");
+
+  // ---- counters and settings records cannot be made or removed ----
+  await no(setDoc(doc(superDb, "id_map", "second"), { type: "Main" }), "nobody creates a second counter record");
+  await no(deleteDoc(doc(superDb, "id_map", "main")), "nobody deletes the counters");
+  await no(deleteDoc(doc(admin, "settings", "company")), "admin deletes the settings record");
+  await no(deleteDoc(doc(admin, "payment_response", "pr1")), "admin deletes a payment result");
+  await ok(deleteDoc(doc(superDb, "payment_response", "pr1")), "super admin deletes a payment result");
+}
+
 async function runAttacks(env) {
   await identity(env);
   await privateRecords(env);
+  await shop(env);
 }
 
 module.exports = { runAttacks };

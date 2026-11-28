@@ -172,3 +172,8 @@ Collections: `settings`, `id_map`, `category`, `tags`, `attributes`, `brands`, `
 ## Deviations
 
 (Recorded during the build: any place the code forced a rule different from the spec's tables.)
+
+- **In-app purchase while signed out.** The app's in-app purchase handler (`default_cart_button_widget.dart:904`) has no login check and would then create an order with an empty `customer_id`. Release A refuses that (an order must carry the buyer's own login id). In-app purchase is switched off on live (`settings_inapp_purchase_status` false, no in-app order among 240), so nothing changes today. Signed in, the path is tested and works.
+- **Two more order fields (Release B).** The MyFatoorah path also writes `ready_shipping_request_status` and `custom_shipping_request_status` on the customer's own order (`checkout_payment_method_widget.dart:748`). They are added to the allowed list.
+- **`users` create** is own-record-only for everyone, including office, exactly as the spec says: the panel never creates a record for someone else.
+- **`transactions` read** for a non-office account needs the `designer` role as well as being named in `user_ref`.

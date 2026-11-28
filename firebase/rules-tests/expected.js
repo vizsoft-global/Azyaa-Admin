@@ -90,6 +90,64 @@ const TABLE = {
   subscriptions: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
   review: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
   banners: { doc: plain, rows: { anon: "", customer: "", designer: "", office: "all", super: "all" } },
+
+  // ---- shop set-up ----
+  // Read by the customer app before login. (It still holds the payment keys: stage 2.)
+  settings: {
+    doc: () => ({ type: "Company", settings_company_info: { name: "Azyaa" } }),
+    update: () => ({ "settings_company_info.name": "Changed" }),
+    rows: { anon: "get list", customer: "get list", designer: "get list", office: "get list update", super: "all" },
+  },
+  // The shared counters: both apps bump them while signed in.
+  id_map: {
+    doc: () => ({ type: "Main", order_id: 1 }),
+    update: () => ({ order_id: 2 }),
+    rows: { anon: "get list", customer: "get list update", designer: "get list update", office: "get list update", super: "get list update" },
+  },
+  category: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list update", office: "all", super: "all" } },
+  tags: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list update", office: "all", super: "all" } },
+  attributes: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list update", office: "all", super: "all" } },
+  brands: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list update", office: "all", super: "all" } },
+  user_membership_plans: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list", office: "all", super: "all" } },
+  user_vto_plans: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list", office: "all", super: "all" } },
+  theme: { doc: plain, rows: { anon: "get list", customer: "get list", designer: "get list", office: "all", super: "all" } },
+
+  // ---- selling ----
+  // "update" here is the plain signed-in rule of Release A; Release B narrows it.
+  coupon: {
+    doc: () => ({ coupon_status: "active", coupon_value: "X", coupon_limit: 5, coupon_used_user_list: [] }),
+    update: () => ({ coupon_limit: 4 }),
+    rows: { anon: "", customer: "get list update", designer: "get list update", office: "all", super: "all" },
+  },
+  products: {
+    doc: (db, owner) => ({ status: "active", product_id: "P", product_authorizer: { product_designer_id: owner }, product_notify_list: [] }),
+    update: () => ({ product_notify_list: ["someone@example.test"] }),
+    rows: { anon: "get list", customer: "get list update", designer: "get list create update", office: "all", super: "all" },
+  },
+  inventory: {
+    doc: (db, owner) => ({ status: "active", designer_uid: owner, stock: 5, stock_reserved: 0 }),
+    update: () => ({ stock: 4, stock_reserved: 1 }),
+    rows: { anon: "get list", customer: "get list update", designer: "get list create update", office: "all", super: "all" },
+  },
+  orders: {
+    doc: (db, owner) => ({ order_id: "O", customer_id: owner, customer_ref: person(db, owner), order_status: "Initialization", total_price: 1 }),
+    update: () => ({ payment_id: "PAY-1" }),
+    rows: { anon: "", customer: "get list create update", designer: "get list create update", office: "get list create update", super: "all" },
+  },
+  return_requests: {
+    doc: (db, owner) => ({ status: "Pending", userRef: person(db, owner), return_request_id: "R" }),
+    rows: { anon: "", customer: "get list create", designer: "get list create", office: "get list create update", super: "all" },
+  },
+  sales_history: {
+    doc: (db, owner) => ({ user_ref: person(db, owner), sale_history: [] }),
+    update: () => ({ sale_history: [{ sale_order_id: "O" }] }),
+    rows: { anon: "", customer: "get list update", designer: "get list update", office: "get list create update", super: "all" },
+  },
+  // Written by the payment hook (Make.com) with no login: left open until stage 2.
+  payment_response: {
+    doc: plain,
+    rows: { anon: "get list create update", customer: "get list create update", designer: "get list create update", office: "get list create update", super: "all" },
+  },
 };
 
 module.exports = { TABLE, plain };

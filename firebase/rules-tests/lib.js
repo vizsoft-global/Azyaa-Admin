@@ -20,8 +20,9 @@ const HOST = "127.0.0.1";
 const PORT = 8085;
 const RULES_PATH = path.join(__dirname, "..", "firestore.rules");
 
+/** The rules under test: firebase/firestore.rules, or `RULES_FILE` to check another copy. */
 function newRules() {
-  return fs.readFileSync(RULES_PATH, "utf8");
+  return fs.readFileSync(process.env.RULES_FILE || RULES_PATH, "utf8");
 }
 
 /** The rules this branch started from: `OLD_RULES` (a file) or `OLD_RULES_REF` (a git ref, default origin/main). */
