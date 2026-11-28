@@ -1,7 +1,7 @@
 # Database lockdown, stage 1 — rules and back-office fixes
 
 Status: design for approval
-Date: 2026-11-28
+Date: 2026-11-28 (updated the same day: services rule in 9.1, search copy in problem 9 and 6.4)
 Repos touched: `Azyaa-Admin` (Firestore rules, rules tests, cloud functions). `azya-admin-2026` (admin panel) only if a test shows the panel breaks a new rule. The customer app is **not** changed.
 Firebase project: `azyaa-0uiv4k`
 
@@ -19,6 +19,7 @@ What that exposes today, confirmed against the live project:
 6. **Anyone can push a notification to any user.** `sendPushNotificationToUser` and `sendPushNotificationToUsers` have no login check. `generateDynamicReport` has none either.
 7. **Catalogue, roles, permissions, coupons, plans, settings** can be created by anyone and changed by any signed-in customer; `orders`, `inventory`, `settings`, `id_map`, `payment_response`, `sales_history`, `user_waitlist`, `store_valley_inventory`, `inventorymovementlog` can be changed with no login at all.
 8. **Any signed-in customer can delete** any order, user, product or stock record.
+9. **The search service holds an open copy of customers and orders** (found 28 Nov 2026, after the first draft). Six Firebase add-ons copy `users`, `orders`, `inventory`, `products`, `category` and `brands` to Algolia. The Algolia key built into the customer app and the old Flutter admin (the same key in both) reads all six copies with no login: 81 customer records with email, name and date of birth, and 239 orders with items, totals and shipping address. The same key may also add, delete and re-configure those copies; it is not a search-only key. Firestore rules do not touch this copy, so closing `orders` in Firestore changes nothing here. See 6.4.
 
 A second group of problems cannot be fixed by rules, because the customer app relies on the open access. They are stage 2 (section 9) and are **not** solved here:
 
@@ -29,6 +30,8 @@ A second group of problems cannot be fixed by rules, because the customer app re
 ## 2. Goals
 
 - Close items 1–4 and 6–8 above, and reduce item 5, without an app release.
+- Close item 9 as far as it can be closed without an app release (6.4).
+- Add no new outside service. The owner's rule (28 Nov 2026): as few different services as possible, Firebase and Cloudflare for most things. Stage 1 uses Firebase only; section 9 lists what stage 2 moves or removes.
 - Nothing a customer, a guest, a designer or office staff does today in the customer app or the React panel stops working, with the exceptions listed in section 6.
 - Every rule is proven on the local emulator before release, the same way the delivery rules were.
 - Each release can be undone in about a minute by putting back the previous ruleset.
@@ -150,7 +153,28 @@ Released before Release A. Neither depends on the rules.
 
 No change is planned. The audit of `azya-admin-2026` found every panel write is made signed in, and by a role the tables above allow. If a rules test modelled on a panel action fails, the builder fixes the rule when the action is legitimate, or raises it when the panel is doing something a designer should not be able to do. Known cases to model: product save by a designer (touches `products`, `inventory`, `category`, `tags`, `id_map`), restock request and pickup by a designer, "line ready" on an order, the translation page under a designer login, role change from the Roles screen, designer and creator approval, the Register form, and the notifications page.
 
+### 6.4 The search copy at Algolia
+
+This is a settings change at Algolia and in the Firebase add-ons, not code. It is independent of the rules and can go first. It needs someone signed in to the Algolia dashboard (the builder cannot sign in), and the owner's go-ahead for each part.
+
+Facts, 28 Nov 2026:
+
+- The customer app on `main` no longer searches through Algolia; its search reads Firestore and matches in the app (`lib/backend/search/search_service.dart`). The Algolia key is still built in. An older store build may still search `products`, `category`, `brands` and `users` through Algolia (open question 2).
+- The old Flutter admin searches all six copies, including `orders` and `inventory`.
+- The React panel does not use Algolia (the package is listed but nothing calls it).
+- The add-ons keep their own Algolia key in Secret Manager. Whether it is the same key as the built-in one is not known and must be checked first, in the Algolia dashboard.
+
+Steps:
+
+1. **Make the built-in key search-only.** In the Algolia dashboard, edit that key: rights `search` only; indexes `products`, `category`, `brands`, `users`. If the add-ons turn out to use this same key, first create a new write key, put it into the six add-ons, confirm a product edit still reaches Algolia, and only then restrict the old key. Breaks nothing in the customer app at any version. In the old Flutter admin, order search and stock search stop.
+2. **Stop returning private fields from the `users` copy.** In the `users` index settings, mark `email`, `user_info.date_of_birth` and `user_info.age` as not retrievable. They stay searchable for the old admin's customer search but are no longer handed back.
+3. **Remove the `orders` and `inventory` copies.** Uninstall the two add-ons that feed them and delete the two indexes at Algolia. The originals in Firestore are untouched. Only if the owner confirms the old Flutter admin is no longer used for order or stock search (open question 3); otherwise step 1 already hides them from the built-in key.
+
+After step 1 the built-in key can still read product, category and brand copies (public anyway) and the `users` copy minus the private fields. Removing Algolia altogether is stage 2 (section 9).
+
 ## 7. What stops working, on purpose
+
+- **Order search and stock search in the old Flutter admin** (6.4, step 1). The React panel is unaffected.
 
 - **The waitlist form and the secret-code screen in the customer app.** Both run before login and write to `user_waitlist`, `id_map`, `notification` and `settings`. Both features are switched off on live (`settings_waitlist_feature` and `settings_secret_feature` are false; the last waitlist record is from December 2025). If either is switched back on, it will fail until stage 2 gives it a back-office program. This is my call; say so if the waitlist is coming back soon.
 - **The old Flutter admin's pre-login loading.** That site starts reading before login on most routes; the reads that need staff will now be refused until the person signs in. Signed-in staff use it as before.
@@ -170,6 +194,7 @@ No change is planned. The audit of `azya-admin-2026` found every panel write is 
 
 **Release order.** Each step needs the owner's go-ahead.
 
+0. The search copy (6.4), by whoever holds the Algolia login. Independent of the rest; can be done the same day it is approved.
 1. Back office (6.2).
 2. Release A. Before it: download the live ruleset, confirm it is still the file on `main`, keep it as the rollback copy.
 3. Owner's check after A (about 15 minutes, signed in): in the app, open as guest, register a new account, browse, add to cart, place a test order through to the paid screen, open the order list. In the panel, sign in as super admin and as a designer, save a product, open orders, open notifications.
@@ -191,13 +216,36 @@ No change is planned. The audit of `azya-admin-2026` found every panel write is 
 
 Payments are in test mode on live today (MyFatoorah primary, production off). Stage 2 should be done before production payments are switched on.
 
+### 9.1 Services: Firebase and Cloudflare for most things
+
+The owner's rule, 28 Nov 2026: avoid as many different services as possible; Firebase and Cloudflare for most. Stage 2 is where it is applied, because almost every outside address is built into the customer app and only an app release can change it. Stage 2's design must not add a service outside Firebase and Cloudflare, and must settle each row below.
+
+| Service today | What it does | Plan |
+|---|---|---|
+| Make.com | Receives the payment provider's result and (it appears) saves it to `payment_response`. Its address is built into the app. | Replace with a Firebase function that checks the result with the provider. Removes Make.com. |
+| `proxy.vizsoft.in` (own relay server) | Passes the web version's calls on to Tap, the three Render servers and dub.co. | Not needed once those calls are made by the back office. Remove. |
+| Render, three small servers | `nocodeplayground`: login codes by WhatsApp, SMS and email through OTPless. `standalone-5vgm`: file and image upload. `newplot`: try-on and image watermark. | Move to Firebase functions and Firebase Storage. Try-on follows the try-on design. |
+| OTPless | Sends the WhatsApp and SMS codes. Phone codes are switched off on live. | Remove, or use Firebase phone sign-in if phone login is wanted. Owner's choice. |
+| Algolia | Search copy of six collections (problem 9). The customer app on `main` no longer uses it. | Remove completely once no app build in use searches through it and the old Flutter admin is retired. |
+| Branch and dub.co | Share links. A dub.co key is built into the app. | The project's own `azyaa-link` site on Cloudflare Pages already exists. Keep that one, remove the other two, cancel the dub.co key. |
+| `backend.vizsoft.in` (own server) | Shipping labels in the old Flutter admin only. | Goes away with the old Flutter admin. |
+| Mail account behind the Trigger Email add-on | Actually delivers the emails (an outside mail account under the `bonuskw.com` name). | Firebase cannot deliver email by itself, so one mail provider stays. Stage 2 checks whether Cloudflare's email sending can take it over; if not, keep this one. |
+| RevenueCat | In-app purchases through Apple and Google. | Stays while memberships are sold in the app. Owner's choice. |
+| MyFatoorah, UPayments, Tap | Take payment. Three are wired in; one is in use. | A payment provider cannot be Firebase or Cloudflare. Going down to one is the owner's choice. |
+| Store Valley | Warehouse and drivers. | Stays. |
+| Try-on provider | Makes the try-on pictures. | Stays (try-on design). |
+| `restcountries.com`, `flagcdn.com`, `ui-avatars.com` | Country list, flags, placeholder avatars. | Bundle into the app. Remove. |
+| Google Translate add-ons, Cloudflare Images, Cloudflare Pages (panel, link site) | Translation, pictures, hosting. | Already Firebase or Cloudflare. Stay. |
+| GitHub | Stores the code. | Stays. |
+
 ## 10. Open questions for the owner
 
-1. **How does the Make.com scenario talk to the database?** It saves the payment result into `payment_response`, and it may also look up the order. If it uses a Google account connection, rules do not bind it: `payment_response` can then be closed to everyone else in Release A and nothing else matters. If it uses plain web requests with no login, `payment_response` must stay open until stage 2, **and** any lookup it does on `orders` would be refused once `orders` needs a login. Until answered: `payment_response` is left exactly as it is today (read and write), `orders` still moves to "signed in", and the owner's check after Release A includes a test payment that must reach the paid screen. If it does not, Release A is rolled back and `orders` reads stay open until the answer is known.
+1. **How does the Make.com scenario talk to the database?** It saves the payment result into `payment_response`, and it may also look up the order. If it uses a Google account connection, rules do not bind it: `payment_response` can then be closed to everyone else in Release A and nothing else matters. If it uses plain web requests with no login, `payment_response` must stay open until stage 2, **and** any lookup it does on `orders` would be refused once `orders` needs a login. Until answered: `payment_response` is left exactly as it is today (read and write), `orders` still moves to "signed in", and the owner's check after Release A includes a test payment that must reach the paid screen. If it does not, Release A is rolled back and `orders` reads stay open until the answer is known. (Under the services rule in 9.1, Make.com is replaced by a Firebase function in stage 2 either way; this question now only protects stage 1.)
 2. **Which app build is in the App Store and Play Store today?** The field lists in Release B were read from `main` (version 1.8.3+83). If the store build is older, the builder needs its commit or tag to check its write sites too. Until answered: Release B is built from `main` and the owner's check in step 4 is the safety net.
 3. **Does anyone still work in the old Flutter admin, and can it be taken offline?** The tables were checked against the React panel and the customer app. If designers or staff still use the old admin for real work, the builder must check its writes against Release B as well. If nobody does, taking the site offline removes one more way in.
 4. **Is there any other program that reads or writes the database directly?** For example a delivery partner app that signs partners in from `delivery_login_creds`, or a website form. None was found in the three repositories. If one exists, Release A would cut it off.
 5. **May the plain-text partner passwords be removed from the 5 old `delivery_login_creds` records?** The React panel never reads or writes them. Not done unless approved.
+6. **Who holds the Algolia login, and are the three steps in 6.4 approved?** Step 1 (search-only key) and step 2 (hide email and date of birth) are safe for the customer app. Step 3 (remove the order and stock copies) depends on question 3. Until answered: nothing is changed at Algolia, and the copy stays readable.
 
 ## 11. Left to the builder
 
