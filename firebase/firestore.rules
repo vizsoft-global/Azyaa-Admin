@@ -1,15 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // ---- who is asking ----
     function signedIn() {
       return request.auth != null;
     }
 
-    // Panel staff: the caller's own users record (its id is the login id) carries a panel role.
+    function isMe(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function myUserPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // The role on a users record; a missing, empty or null role is "no role".
+    function roleOf(data) {
+      return data.get('role_unique_key', '') == null ? '' : data.get('role_unique_key', '');
+    }
+
+    // The caller's panel role, read from the record filed under their login id
+    // as it is before this request. '' when signed out or without a record.
+    function myRole() {
+      return signedIn() && exists(myUserPath()) ? roleOf(get(myUserPath()).data) : '';
+    }
+
+    // Panel staff: designers and office.
     function isStaff() {
-      return signedIn()
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role_unique_key
-          in ['super_admin', 'admin', 'shop_manager', 'designer'];
+      return myRole() in ['super_admin', 'admin', 'shop_manager', 'designer'];
+    }
+
+    function isOffice() {
+      return myRole() in ['super_admin', 'admin', 'shop_manager'];
+    }
+
+    function isSuperAdmin() {
+      return myRole() == 'super_admin';
+    }
+
+    function isDesigner() {
+      return myRole() == 'designer';
+    }
+
+    // ---- what is being changed ----
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function unchanged(field) {
+      return request.resource.data.get(field, null) == resource.data.get(field, null);
     }
 
     match /id_map/{document} {
@@ -19,11 +58,52 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
-    match /users/{document} {
-      allow create: if true;
+    // People. Readable by everyone for now: guests browse designers and
+    // creators from these records (splitting them is stage 2).
+    match /users/{userId} {
+      // A role is only ever given by office staff; `super_admin` only by a super admin.
+      function keepsRole() {
+        return roleOf(request.resource.data) == roleOf(resource.data);
+      }
+      // `user_role` is a label, not access, but only these two are ever written by the apps.
+      function plainUserRole() {
+        return !('user_role' in request.resource.data)
+          || request.resource.data.user_role in ['Customer', 'Admin'];
+      }
+      function keepsOrPlainUserRole() {
+        return unchanged('user_role') || request.resource.data.user_role in ['Customer', 'Admin'];
+      }
+      function sameSuperAdminStanding() {
+        return (roleOf(request.resource.data) == 'super_admin') == (roleOf(resource.data) == 'super_admin');
+      }
+
+      // Approval as a designer or creator is given by the office. Neither app
+      // writes these two fields on the person's own record.
+      function approvals(data) {
+        return [
+          data.get(['designer_main_info', 'designer_status'], null),
+          data.get(['creator_main_info', 'creator_status'], null)
+        ];
+      }
+
       allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+
+      // Your own record, under your own login id, with no panel role in it.
+      // (The panel never creates a record for someone else; it only changes existing ones.)
+      allow create: if isMe(userId) && roleOf(request.resource.data) == '' && plainUserRole()
+        && approvals(request.resource.data) == [null, null];
+
+      allow update: if
+        // your own record: anything but your role and your approvals
+        (isMe(userId) && keepsRole() && keepsOrPlainUserRole()
+          && approvals(request.resource.data) == approvals(resource.data))
+        // office: anything, except giving or taking away super admin
+        || isSuperAdmin()
+        || (isOffice() && sameSuperAdminStanding())
+        // the customer app pays the referral bonus onto the referrer's record
+        || (signedIn() && changedKeys().hasOnly(['points_balance', 'user_vto']));
+
+      allow delete: if isSuperAdmin();
     }
 
     match /user_referral_activities/{document} {
@@ -152,18 +232,15 @@ service cloud.firestore {
       allow delete: if request.auth != null;
     }
 
+    // Panel roles: every signed-in account reads its own role to build its menu.
     match /roles/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if signedIn();
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /permissions/{document} {
-      allow create: if true;
-      allow read: if true;
-      allow write: if request.auth != null;
-      allow delete: if request.auth != null;
+      allow read: if isStaff();
+      allow create, update, delete: if isSuperAdmin();
     }
 
     match /user_waitlist/{document} {
