@@ -1,6 +1,11 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const {
+  codeRecord,
+  publicCodeMarker,
+  saveCode,
+} = require("./store_valley_codes.js");
 
 const DEFAULT_BASE_URL =
   "https://us-central1-store-valley-websitek-staging.cloudfunctions.net/api/v1";
@@ -152,17 +157,35 @@ async function persistCreateSnapshot(path, method, upstreamBody, extras) {
     client_order_id: upstreamBody.client_order_id || null,
     resource_path: path,
   };
+  // The code and who it was sent to go to the private store only. The
+  // readable snapshot just says a code exists.
+  const db = extra.db || admin.firestore();
+  const notify =
+    extra.notifyCustomer && typeof extra.notifyCustomer === "object"
+      ? extra.notifyCustomer
+      : null;
   if (extra.pickupOtp) {
-    payload.pickup_otp = extra.pickupOtp;
-    payload.otp_sent_at = admin.firestore.FieldValue.serverTimestamp();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    await saveCode(
+      db,
+      codeRecord({
+        trackingId,
+        code: extra.pickupOtp,
+        notify,
+        body: upstreamBody,
+        path,
+        sentAt: now,
+        now,
+      }),
+    );
+    Object.assign(
+      payload,
+      publicCodeMarker({ now, otpType: notify && notify.otpType }),
+    );
+  } else if (notify && notify.otpType) {
+    payload.otp_type = notify.otpType;
   }
-  if (extra.notifyCustomer && typeof extra.notifyCustomer === "object") {
-    payload.otp_user_id = extra.notifyCustomer.userId || null;
-    payload.otp_phone = extra.notifyCustomer.phone || null;
-    payload.otp_email = extra.notifyCustomer.email || null;
-    payload.otp_type = extra.notifyCustomer.otpType || null;
-  }
-  await admin.firestore().collection("logistics_response").add(payload);
+  await db.collection("logistics_response").add(payload);
 }
 
 function attachGeneratedDeliveryOtp(body, opts) {

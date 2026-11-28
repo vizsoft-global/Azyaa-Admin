@@ -2,6 +2,7 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const { notifyOtp } = require("./store_valley_proxy.js");
 const { requireStaff } = require("./store_valley_staff.js");
+const { lookupCode } = require("./store_valley_codes.js");
 
 function assertAuthenticated(auth) {
   if (!auth) {
@@ -35,6 +36,30 @@ function resolvePickupOtpForResend(docData) {
     throw error;
   }
   return String(otp);
+}
+
+/**
+ * What to resend and to whom: the code and contact details from the private
+ * store (`found`), with the status of the readable record deciding whether a
+ * resend is still allowed. Old records that carry everything themselves work too.
+ */
+function resendTarget(logistics, found) {
+  const record = logistics || {};
+  const code = (found && found.code) || record.pickup_otp || "";
+  return {
+    record: {
+      pickup_otp: code,
+      status: record.status,
+      otp_verification_status: record.otp_verification_status,
+    },
+    notify: {
+      userId: (found && found.user_id) || record.otp_user_id || null,
+      phone: (found && found.phone) || record.otp_phone || null,
+      email: (found && found.email) || record.otp_email || null,
+      otpType:
+        (found && found.otp_type) || record.otp_type || "designer_pickup",
+    },
+  };
 }
 
 function toHttpsError(error) {
@@ -85,23 +110,19 @@ exports.storeValleyResendPickupOtp = functions.https.onCall(
         error.code = "invalid-argument";
         throw error;
       }
+      // The code is kept in the private store; records written before it
+      // existed still carry it themselves, and `lookupCode` reads both.
       const doc = await findLogisticsDoc(trackingId);
-      if (!doc) {
+      const found = await lookupCode(admin.firestore(), trackingId);
+      if (!doc && !found) {
         const error = new Error("Intake tracking record was not found.");
         error.code = "not-found";
         throw error;
       }
-      const payload = doc.data() || {};
-      const otp = resolvePickupOtpForResend(payload);
-      await notifyOtp(
-        {
-          userId: payload.otp_user_id || null,
-          phone: payload.otp_phone || null,
-          email: payload.otp_email || null,
-          otpType: payload.otp_type || "designer_pickup",
-        },
-        otp,
-      );
+      const payload = (doc && doc.data()) || {};
+      const resend = resendTarget(payload, found);
+      const otp = resolvePickupOtpForResend(resend.record);
+      await notifyOtp(resend.notify, otp);
       return { ok: true };
     } catch (error) {
       toHttpsError(error);
@@ -112,3 +133,4 @@ exports.storeValleyResendPickupOtp = functions.https.onCall(
 module.exports.assertAuthenticated = assertAuthenticated;
 module.exports.isResendBlocked = isResendBlocked;
 module.exports.resolvePickupOtpForResend = resolvePickupOtpForResend;
+module.exports.resendTarget = resendTarget;
