@@ -109,18 +109,28 @@ async function expectCode(promise, code, label) {
 
 (async () => {
   const db = fakeDb(
-    { staff1: { role_unique_key: "admin" }, des1: { role_unique_key: "designer" } },
+    {
+      staff1: { role_unique_key: "admin" },
+      des1: { role_unique_key: "designer" },
+      // A second record that merely claims cust1's login id in its `uid` field.
+      cust1: { role_unique_key: "super_admin" },
+    },
     { old1: { role_unique_key: "super_admin" }, cust1: { role_unique_key: "customer" } },
-  );
-  assertEqual(
-    (await loadStaffProfile(db, "staff1")).role_unique_key,
-    "admin",
-    "found by uid field",
   );
   assertEqual(
     (await loadStaffProfile(db, "old1")).role_unique_key,
     "super_admin",
-    "falls back to record id",
+    "found under the login id",
+  );
+  assertEqual(
+    (await loadStaffProfile(db, "cust1")).role_unique_key,
+    "customer",
+    "the record under the login id wins over one that claims the uid",
+  );
+  assertEqual(
+    (await loadStaffProfile(db, "staff1")).role_unique_key,
+    "admin",
+    "falls back to the uid field when no record sits under the login id",
   );
   assertEqual(await loadStaffProfile(db, "nobody"), null, "no record");
 

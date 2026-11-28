@@ -1,5 +1,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const { requireStaff } = require("./store_valley_staff.js");
 // To avoid deployment errors, do not call admin.initializeApp() in your code
 
 exports.generateDynamicReport = functions
@@ -8,6 +9,9 @@ exports.generateDynamicReport = functions
     memory: "512MB",
   })
   .https.onCall(async (data, context) => {
+    // Office staff only: checked before anything else.
+    await requireStaff(context, { noDesigner: true });
+
     // 1. Extract dynamic parameters from the client request
     const projectId = data.projectId;
     const collectionName = data.collectionName;

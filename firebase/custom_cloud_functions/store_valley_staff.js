@@ -36,21 +36,23 @@ function staffDecision(auth, profile, opts) {
 }
 
 /**
- * The caller's `users` record. The panel finds it by the `uid` field, so that
- * is tried first; the record id is the uid for accounts made by the apps, so
- * that is the fallback.
+ * The caller's `users` record. The record filed under the login id is the one
+ * the database rules trust, so it is read first. Only when there is none is
+ * the `uid` field searched (one old account is filed under another id).
+ * A second record that merely claims someone's uid can never outrank the
+ * record under the login id.
  */
 async function loadStaffProfile(db, uid) {
+  const direct = await db.collection("users").doc(uid).get();
+  if (direct.exists) {
+    return direct.data() || {};
+  }
   const byField = await db
     .collection("users")
     .where("uid", "==", uid)
     .limit(1)
     .get();
-  if (!byField.empty) {
-    return byField.docs[0].data() || {};
-  }
-  const direct = await db.collection("users").doc(uid).get();
-  return direct.exists ? direct.data() || {} : null;
+  return byField.empty ? null : byField.docs[0].data() || {};
 }
 
 /**
